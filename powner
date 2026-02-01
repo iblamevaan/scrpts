@@ -1,0 +1,49 @@
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+local workspace = game:GetService("Workspace")
+
+-- Check if the sethiddenproperty function is available
+local function isNetworkOwnershipAvailable()
+    return typeof(sethiddenproperty) == "function"
+end
+
+local function setNetworkOwnership(part)
+    -- Ensure the part is not anchored
+    if part:IsA("BasePart") and not part.Anchored then
+        -- Attempt to take network ownership of the part
+        if isNetworkOwnershipAvailable() then
+            sethiddenproperty(player, "NetworkOwnership", part)
+        else
+            warn("Network ownership control is not available")
+        end
+    end
+end
+
+-- Monitor unanchored parts and maintain network ownership
+workspace.DescendantAdded:Connect(function(child)
+    if child:IsA("BasePart") and not child.Anchored then
+        setNetworkOwnership(child)
+    end
+end)
+
+-- Ensure to set network ownership for existing unanchored parts in the workspace
+for _, part in pairs(workspace:GetDescendants()) do
+    setNetworkOwnership(part)
+end
+
+-- Optionally, if the player moves around and you want to monitor parts in proximity:
+local function onPlayerMoved()
+    -- Set network ownership for parts near the player
+    for _, part in pairs(workspace:GetDescendants()) do
+        if part:IsA("BasePart") and not part.Anchored then
+            local distance = (part.Position - player.Character.HumanoidRootPart.Position).magnitude
+            -- You can adjust the distance threshold based on your needs
+            if distance < 50 then
+                setNetworkOwnership(part)
+            end
+        end
+    end
+end
+
+-- Update ownership as the player moves
+game:GetService("RunService").Heartbeat:Connect(onPlayerMoved)
