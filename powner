@@ -1,49 +1,72 @@
+--// Services
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+
 local player = Players.LocalPlayer
-local workspace = game:GetService("Workspace")
 
--- Check if the sethiddenproperty function is available
-local function isNetworkOwnershipAvailable()
-    return typeof(sethiddenproperty) == "function"
+--// Safety
+if not player then return end
+
+--// Ownership tracking (prevents spam)
+local owned = setmetatable({}, { _mode = "k" })
+
+--// Fast ownership check
+local function canTakeOwnership(part)
+    return part:IsA("BasePart")
+        and not part.Anchored
+        and not owned[part]
 end
 
-local function setNetworkOwnership(part)
-    -- Ensure the part is not anchored
-    if part:IsA("BasePart") and not part.Anchored then
-        -- Attempt to take network ownership of the part
-        if isNetworkOwnershipAvailable() then
+--// Instant ownership attempt
+local function takeOwnership(part)
+    if not canTakeOwnership(part) then return end
+
+    -- exploit-supported methods
+    pcall(function()
+        if part.SetNetworkOwner then
+            part:SetNetworkOwner(player)
+        elseif typeof(sethiddenproperty) == "function" then
             sethiddenproperty(player, "NetworkOwnership", part)
-        else
-            warn("Network ownership control is not available")
         end
-    end
+    end)
+
+    owned[part] = true
 end
 
--- Monitor unanchored parts and maintain network ownership
-workspace.DescendantAdded:Connect(function(child)
-    if child:IsA("BasePart") and not child.Anchored then
-        setNetworkOwnership(child)
+--// Claim ALL existing unanchored parts immediately
+for , inst in ipairs(Workspace:GetDescendants()) do
+    takeOwnership(inst)
+end
+
+--// INSTANT: when a part is added
+Workspace.DescendantAdded:Connect(function(inst)
+    takeOwnership(inst)
+
+    -- INSTANT: if it later becomes unanchored
+    if inst:IsA("BasePart") then
+        inst:GetPropertyChangedSignal("Anchored"):Connect(function()
+            if not inst.Anchored then
+                takeOwnership(inst)
+            end
+        end)
     end
 end)
 
--- Ensure to set network ownership for existing unanchored parts in the workspace
-for _, part in pairs(workspace:GetDescendants()) do
-    setNetworkOwnership(part)
-end
+--// INSTANT proximity claim (no delay, no loop spam)
+RunService.Stepped:Connect(function()
+    local char = player.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
 
--- Optionally, if the player moves around and you want to monitor parts in proximity:
-local function onPlayerMoved()
-    -- Set network ownership for parts near the player
-    for _, part in pairs(workspace:GetDescendants()) do
-        if part:IsA("BasePart") and not part.Anchored then
-            local distance = (part.Position - player.Character.HumanoidRootPart.Position).magnitude
-            -- You can adjust the distance threshold based on your needs
-            if distance < 50 then
-                setNetworkOwnership(part)
+    local pos = hrp.Position
+    local radius = 60
+
+    for _, inst in ipairs(Workspace:GetDescendants()) do
+        if inst:IsA("BasePart") and not owned[inst] and not inst.Anchored then
+            if (inst.Position - pos).Magnitude <= radius then
+                takeOwnership(inst)
             end
         end
     end
-end
-
--- Update ownership as the player moves
-game:GetService("RunService").Heartbeat:Connect(onPlayerMoved)
+end)
