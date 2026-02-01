@@ -1,0 +1,421 @@
+--// GOJO MOVES + FLY + ESP + CLICKABLE TP/VIEW + STOP VIEWING
+--// Teleports, Afterimages, Anti-Fling, Fly + Name/Health ESP + GUI + TP/View Buttons
+
+-- SERVICES
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+local humanoid = character:WaitForChild("Humanoid")
+
+-- ======================
+-- CONFIG
+-- ======================
+local TELEPORT_RADIUS = 10
+local TELEPORT_DISTANCE = 7
+local TELEPORT_COOLDOWN = 0.5
+local MOVEMENT_THRESHOLD = 0.1
+local SMOOTH_ANTI_FLING = 0.2
+local SAFE_DISTANCE = 6 -- min distance from target
+
+local TELEPORT_KEY = Enum.KeyCode.E
+local TELEPORT_DURATION = 0.1
+local TELEPORT_HEIGHT_OFFSET = 4
+
+local FLY_KEY = Enum.KeyCode.F
+local FLY_SPEED = 50
+
+local AFTERIMAGE_COLOR = Color3.fromRGB(0,0,0)
+local AFTERIMAGE_DURATION = 0.25
+
+local ESPUpdateRate = 0.05
+local ESPEnabled = true
+
+-- ======================
+-- STATE
+-- ======================
+local lastTeleport = 0
+local infinityActive = false
+local previousPositions = {}
+local flying = false
+local flyBV, flyBG = nil, nil
+local keysDown = {}
+local ESP = {}
+local viewingPlayer = nil -- current player being viewed
+local viewOffset = Vector3.new(0,5,10) -- camera offset behind and above head
+
+-- ======================
+-- FUNCTIONS
+-- ======================
+
+-- ===== Afterimage =====
+local function spawnAfterimage()
+    if not character then return end
+    character.Archivable = true
+    local clone = character:Clone()
+    character.Archivable = false
+
+    clone.Name = "AfterImage"
+    clone.Parent = Workspace
+    clone.PrimaryPart = clone:FindFirstChild("HumanoidRootPart")
+    if clone.PrimaryPart then
+        clone:SetPrimaryPartCFrame(hrp.CFrame)
+    end
+
+    local hum = clone:FindFirstChildOfClass("Humanoid")
+    if hum then hum:Destroy() end
+
+    for _, part in ipairs(clone:GetDescendants()) do
+        if part:IsA("BasePart") or part:IsA("MeshPart") then
+            part.Anchored = true
+            part.CanCollide = false
+            part.Material = Enum.Material.Glass
+            part.Reflectance = 0.15
+            part.Transparency = 0.5
+            part.Color = AFTERIMAGE_COLOR
+            TweenService:Create(part, TweenInfo.new(AFTERIMAGE_DURATION), {Transparency=1}):Play()
+        end
+    end
+
+    task.delay(AFTERIMAGE_DURATION, function()
+        if clone then clone:Destroy() end
+    end)
+end
+
+-- ===== Ground Detection =====
+local function getGroundY(pos)
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    local ray = Workspace:Raycast(pos + Vector3.new(0,10,0), Vector3.new(0,-50,0), params)
+    return ray and ray.Position.Y or pos.Y
+end
+
+-- ===== Teleport Behind Target (Safe) =====
+local function teleportBehind(targetHRP)
+    local lookVector = targetHRP.CFrame.LookVector
+    local rightVector = targetHRP.CFrame.RightVector
+
+    -- Backwards offset + small random sideways
+    local offset = -lookVector * SAFE_DISTANCE + rightVector * math.random(-2,2)
+    local desiredPos = targetHRP.Position + offset
+    desiredPos = Vector3.new(desiredPos.X, getGroundY(desiredPos) + TELEPORT_HEIGHT_OFFSET, desiredPos.Z)
+
+    -- Raycast to avoid hitting the target
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {character, targetHRP.Parent}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    local rayDir = desiredPos - targetHRP.Position
+    local distance = rayDir.Magnitude
+    if distance > 0 then
+        local ray = Workspace:Raycast(targetHRP.Position, rayDir.Unit * distance, params)
+        if ray then
+            desiredPos = ray.Position - rayDir.Unit * 1
+        end
+    end
+
+    spawnAfterimage()
+    local cframe = CFrame.new(desiredPos, Vector3.new(targetHRP.Position.X, desiredPos.Y, targetHRP.Position.Z))
+    TweenService:Create(hrp, TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame=cframe}):Play()
+end
+
+-- ===== Mouse Teleport =====
+local function getMouseHit()
+    local mouse = player:GetMouse()
+    if mouse then return mouse.Hit.Position end
+end
+
+local function getSafePosition(pos)
+    local params = RaycastParams.new()
+    params.FilterDescendantsInstances = {character}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
+    local ray = Workspace:Raycast(pos+Vector3.new(0,50,0), Vector3.new(0,-100,0), params)
+    if ray then
+        return Vector3.new(pos.X, ray.Position.Y+TELEPORT_HEIGHT_OFFSET, pos.Z)
+    else
+        return Vector3.new(pos.X, pos.Y+TELEPORT_HEIGHT_OFFSET, pos.Z)
+    end
+end
+
+local function teleportToMouse()
+    local mousePos = getMouseHit()
+    if not mousePos then return end
+    spawnAfterimage()
+    local targetPos = getSafePosition(mousePos)
+    TweenService:Create(hrp, TweenInfo.new(TELEPORT_DURATION, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {CFrame=CFrame.new(targetPos)}):Play()
+end
+
+-- ===== Fly =====
+local function toggleFly()
+    flying = not flying
+    if flying then
+        flyBV = Instance.new("BodyVelocity")
+        flyBV.MaxForce = Vector3.new(1e5,1e5,1e5)
+        flyBV.Velocity = Vector3.new(0,0,0)
+        flyBV.P = 1e5
+        flyBV.Parent = hrp
+
+        flyBG = Instance.new("BodyGyro")
+        flyBG.MaxTorque = Vector3.new(1e5,1e5,1e5)
+        flyBG.CFrame = hrp.CFrame
+        flyBG.P = 1e4
+        flyBG.Parent = hrp
+
+        humanoid.PlatformStand = true
+    else
+        if flyBV then flyBV:Destroy() flyBV=nil end
+        if flyBG then flyBG:Destroy() flyBG=nil end
+        humanoid.PlatformStand=false
+    end
+end
+
+-- ===== ESP =====
+local function createESPForPlayer(p)
+    if p==player then return end
+    local nameText = Drawing.new("Text")
+    nameText.Size = 13
+    nameText.Center = true
+    nameText.Outline = true
+    nameText.Color = Color3.fromRGB(255,255,255)
+
+    local healthBar = Drawing.new("Square")
+    healthBar.Filled=true
+    healthBar.Thickness=1
+    healthBar.Size=Vector2.new(40,5)
+    healthBar.Color=Color3.fromRGB(0,255,0)
+
+    ESP[p] = {nameText, healthBar, nil, nil}
+end
+
+local function removeESPForPlayer(p)
+    if ESP[p] then
+        for _,v in pairs(ESP[p]) do if v then v:Remove() end end
+        ESP[p]=nil
+    end
+end
+
+for _,p in pairs(Players:GetPlayers()) do createESPForPlayer(p) end
+Players.PlayerAdded:Connect(createESPForPlayer)
+Players.PlayerRemoving:Connect(removeESPForPlayer)
+
+-- ===== GUI / Indicators =====
+local ESPIndicator = Drawing.new("Text")
+ESPIndicator.Size = 18
+ESPIndicator.Outline = true
+ESPIndicator.Center = false
+ESPIndicator.Color = Color3.fromRGB(0,170,255)
+ESPIndicator.Visible = true
+
+local InfinityIndicator = Drawing.new("Text")
+InfinityIndicator.Size = 18
+InfinityIndicator.Outline = true
+InfinityIndicator.Center = false
+InfinityIndicator.Color = Color3.fromRGB(0,0,0)
+InfinityIndicator.Visible = true
+
+local stopViewButton = Drawing.new("Text")
+stopViewButton.Size = 18
+stopViewButton.Outline = true
+stopViewButton.Center = true
+stopViewButton.Color = Color3.fromRGB(0,255,255)
+stopViewButton.Text = "STOP VIEWING"
+stopViewButton.Visible = false
+
+local function updateIndicators()
+    local screenSize = Vector2.new(Camera.ViewportSize.X, Camera.ViewportSize.Y)
+    ESPIndicator.Position = Vector2.new(screenSize.X - 140, 20)
+    ESPIndicator.Text = "Six Eyes: " .. (ESPEnabled and "ON" or "OFF")
+
+    InfinityIndicator.Position = Vector2.new(screenSize.X - 140, 45)
+    InfinityIndicator.Text = "Infinity: " .. (infinityActive and "ON" or "OFF")
+
+    stopViewButton.Position = Vector2.new(screenSize.X/2, screenSize.Y-40)
+    stopViewButton.Visible = viewingPlayer~=nil
+end
+
+-- ===== Start/Stop Viewing =====
+local function startViewing(p) viewingPlayer=p end
+local function stopViewing() viewingPlayer=nil end
+
+-- ===== Mouse Click TP/VIEW =====
+local function onClick()
+    local mouse = UserInputService:GetMouseLocation()
+    for p,d in pairs(ESP) do
+        if d[3] and d[3].Visible then
+            local tpX,tpY=d[3].Position.X,d[3].Position.Y
+            if (mouse.X >= tpX-15 and mouse.X <= tpX+15) and (mouse.Y >= tpY-10 and mouse.Y <= tpY+10) then
+                if p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    teleportBehind(p.Character.HumanoidRootPart)
+                end
+            end
+        end
+        if d[4] and d[4].Visible then
+            local viewX,viewY=d[4].Position.X,d[4].Position.Y
+            if (mouse.X >= viewX-15 and mouse.X <= viewX+15) and (mouse.Y >= viewY-10 and mouse.Y <= viewY+10) then
+                startViewing(p)
+            end
+        end
+    end
+    if stopViewButton.Visible then
+        local bx,by=stopViewButton.Position.X, stopViewButton.Position.Y
+        if mouse.X>=bx-60 and mouse.X<=bx+60 and mouse.Y>=by-15 and mouse.Y<=by+15 then
+            stopViewing()
+        end
+    end
+end
+
+-- ===== INPUT =====
+UserInputService.InputBegan:Connect(function(input,gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.R then
+        infinityActive = not infinityActive
+        updateIndicators()
+    elseif input.KeyCode == TELEPORT_KEY then
+        teleportToMouse()
+    elseif input.KeyCode == FLY_KEY then
+        toggleFly()
+    elseif input.KeyCode == Enum.KeyCode.T then
+        ESPEnabled = not ESPEnabled
+        updateIndicators()
+    elseif input.UserInputType == Enum.UserInputType.MouseButton1 then
+        onClick()
+    elseif input.KeyCode == Enum.KeyCode.Q then
+        stopViewing()
+    else
+        if input.UserInputType==Enum.UserInputType.Keyboard then keysDown[input.KeyCode]=true end
+    end
+end)
+UserInputService.InputEnded:Connect(function(input,gp)
+    if gp then return end
+    if input.UserInputType==Enum.UserInputType.Keyboard then keysDown[input.KeyCode]=nil end
+end)
+
+-- ===== MAIN LOOP =====
+local lastESPUpdate=0
+RunService.RenderStepped:Connect(function(dt)
+    -- Anti-fling
+    local lerpF=1-math.exp(-SMOOTH_ANTI_FLING*dt)
+    hrp.AssemblyLinearVelocity = hrp.AssemblyLinearVelocity:Lerp(Vector3.new(0,0,0),lerpF)
+    hrp.AssemblyAngularVelocity = hrp.AssemblyAngularVelocity:Lerp(Vector3.new(0,0,0),lerpF)
+
+    -- Infinity teleport
+    if infinityActive then
+        local now=tick()
+        if now-lastTeleport>=TELEPORT_COOLDOWN then
+            local closestPlayer=nil
+            local closestDistance=TELEPORT_RADIUS+1
+            for _,other in ipairs(Players:GetPlayers()) do
+                if other~=player and other.Character and other.Character:FindFirstChild("HumanoidRootPart") then
+                    local otherHRP=other.Character.HumanoidRootPart
+                    local distance=(otherHRP.Position-hrp.Position).Magnitude
+                    if distance<=TELEPORT_RADIUS then
+                        local prevPos=previousPositions[other] or otherHRP.Position
+                        local velocity=(otherHRP.Position-prevPos)/math.max(dt,0.001)
+                        previousPositions[other]=otherHRP.Position
+
+                        local toMe=(hrp.Position-otherHRP.Position).Unit
+                        local dot=velocity:Dot(toMe)
+                        if velocity.Magnitude>0.1 and dot>MOVEMENT_THRESHOLD and distance<closestDistance then
+                            closestPlayer=otherHRP
+                            closestDistance=distance
+                        end
+                    end
+                end
+            end
+            if closestPlayer then
+                lastTeleport=now
+                teleportBehind(closestPlayer)
+            end
+        end
+    end
+
+    -- Fly movement
+    if flying and flyBV and flyBG then
+        local cam = workspace.CurrentCamera
+        local moveDir = Vector3.new(0,0,0)
+        local forward = cam.CFrame.LookVector
+        local right = cam.CFrame.RightVector
+        local up = Vector3.new(0,1,0)
+
+        if keysDown[Enum.KeyCode.W] then moveDir+=forward end
+        if keysDown[Enum.KeyCode.S] then moveDir-=forward end
+        if keysDown[Enum.KeyCode.A] then moveDir-=right end
+        if keysDown[Enum.KeyCode.D] then moveDir+=right end
+        if keysDown[Enum.KeyCode.Space] then moveDir+=up end
+        if keysDown[Enum.KeyCode.LeftShift] then moveDir-=up end
+
+        if moveDir.Magnitude>0 then moveDir=moveDir.Unit*FLY_SPEED end
+        flyBV.Velocity=moveDir
+        flyBG.CFrame=CFrame.new(hrp.Position, hrp.Position+cam.CFrame.LookVector)
+    end
+
+    -- Viewing camera smooth follow
+    if viewingPlayer and viewingPlayer.Character and viewingPlayer.Character:FindFirstChild("Head") then
+        local targetPos = viewingPlayer.Character.Head.Position + viewOffset
+        Camera.CFrame = CFrame.new(targetPos, viewingPlayer.Character.Head.Position)
+    end
+
+    -- ESP Update
+    lastESPUpdate+=dt
+    if lastESPUpdate>=ESPUpdateRate then
+        lastESPUpdate=0
+        for p,d in pairs(ESP) do
+            local char=p.Character
+            local hum=char and char:FindFirstChild("Humanoid")
+            local head=char and char:FindFirstChild("Head")
+            if ESPEnabled and hum and head and hum.Health>0 then
+                local pos,onScreen=Camera:WorldToViewportPoint(head.Position+Vector3.new(0,2,0))
+                if onScreen then
+                    d[1].Text=p.Name
+                    d[1].Position=Vector2.new(pos.X,pos.Y-10)
+                    d[1].Visible=true
+
+                    local healthPercent=hum.Health/hum.MaxHealth
+                    d[2].Size=Vector2.new(40*healthPercent,5)
+                    d[2].Position=Vector2.new(pos.X-20,pos.Y)
+                    d[2].Color=Color3.fromRGB(255-(255*healthPercent),255*healthPercent,0)
+                    d[2].Visible=true
+
+                    if not d[3] then
+                        d[3]=Drawing.new("Text")
+                        d[3].Size=10
+                        d[3].Color=Color3.fromRGB(0,0,0)
+                        d[3].Center=true
+                        d[3].Outline=true
+                        d[3].Text="TP"
+                    end
+                    if not d[4] then
+                        d[4]=Drawing.new("Text")
+                        d[4].Size=10
+                        d[4].Color=Color3.fromRGB(0,170,255)
+                        d[4].Center=true
+                        d[4].Outline=true
+                        d[4].Text="VIEW"
+                    end
+                    d[3].Position = Vector2.new(pos.X+25,pos.Y-10)
+                    d[4].Position = Vector2.new(pos.X-25,pos.Y-10)
+                    d[3].Visible = true
+                    d[4].Visible = true
+                else
+                    d[1].Visible=false
+                    d[2].Visible=false
+                    if d[3] then d[3].Visible=false end
+                    if d[4] then d[4].Visible=false end
+                end
+            else
+                d[1].Visible=false
+                d[2].Visible=false
+                if d[3] then d[3].Visible=false end
+                if d[4] then d[4].Visible=false end
+            end
+        end
+    end
+
+    updateIndicators()
+end)
