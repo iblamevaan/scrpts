@@ -1,0 +1,224 @@
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local Lighting = game:GetService("Lighting")
+local Debris = game:GetService("Debris")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+-- --- START AUDIO (sped up & quieter) ---
+local startSoundId = "96616607755426"
+local startSound = Instance.new("Sound")
+startSound.SoundId = "rbxassetid://" .. startSoundId
+startSound.Parent = workspace
+startSound.Volume = 3  -- slightly quieter
+startSound:Play()
+startSound.PlaybackSpeed = 1.4
+startSound.TimePosition = 0
+
+-- --- Part Repelling Effect ---
+local FREEZE_START_DISTANCE = 1000
+local WALL_DISTANCE = 1
+local PUSH_FORCE = 100000
+local PUSH_OUT_SPEED = 150
+
+local function getNearbyUnanchoredParts(centerPos, range)
+	local region = Region3.new(centerPos - Vector3.new(range, range, range), centerPos + Vector3.new(range, range, range))
+	local parts = workspace:FindPartsInRegion3WithIgnoreList(region, {player.Character}, math.huge)
+	local valid = {}
+
+	for _, part in ipairs(parts) do
+		if part:IsA("BasePart") and not part.Anchored and not part:IsDescendantOf(player.Character) then
+			table.insert(valid, part)
+		end
+	end
+	return valid
+end
+
+local active = true
+local function heartbeatStep()
+	if not active then return end
+	local character = player.Character
+	if not character then return end
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	local playerPos = hrp.Position
+	local parts = getNearbyUnanchoredParts(playerPos, FREEZE_START_DISTANCE + 5)
+
+	for _, part in ipairs(parts) do
+		local offset = part.Position - playerPos
+		local distance = offset.Magnitude
+
+		local velocityControl = part:FindFirstChild("RepelForce")
+		if not velocityControl then
+			velocityControl = Instance.new("BodyVelocity")
+			velocityControl.Name = "RepelForce"
+			velocityControl.MaxForce = Vector3.new(PUSH_FORCE, PUSH_FORCE, PUSH_FORCE)
+			velocityControl.P = 4000000
+			velocityControl.Parent = part
+		end
+
+		if distance <= WALL_DISTANCE then
+			local direction = offset.Unit
+			velocityControl.Velocity = direction * PUSH_OUT_SPEED
+		elseif distance <= FREEZE_START_DISTANCE then
+			local currentVelocity = part.AssemblyLinearVelocity
+			local factor = math.clamp((distance - WALL_DISTANCE) / (FREEZE_START_DISTANCE - WALL_DISTANCE), 0, 1)
+			velocityControl.Velocity = currentVelocity * factor
+		else
+			if velocityControl then
+				velocityControl:Destroy()
+			end
+		end
+	end
+end
+
+local conn = RunService.Heartbeat:Connect(heartbeatStep)
+
+task.delay(9.5, function()
+	active = false
+	if conn then conn:Disconnect() end
+
+	for _, part in ipairs(workspace:GetDescendants()) do
+		if part:IsA("BodyVelocity") and part.Name == "RepelForce" then
+			part:Destroy()
+		end
+	end
+end)
+
+local function stopScript()
+	active = false
+	if conn then conn:Disconnect() end
+end
+
+player.CharacterAdded:Connect(stopScript)
+if player.Character then
+	local hum = player.Character:FindFirstChild("Humanoid")
+	if hum then hum.Died:Connect(stopScript) end
+end
+player.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid", 5)
+	if hum then hum.Died:Connect(stopScript) end
+end)
+
+-- --- Sky Effects ---
+local savedSky = Lighting:FindFirstChildOfClass("Sky") and Lighting:FindFirstChildOfClass("Sky"):Clone()
+
+for _, v in ipairs(Lighting:GetChildren()) do
+	if v:IsA("Sky") then v:Destroy() end
+end
+
+-- Sky 1 fade
+local sky1 = Instance.new("Sky", Lighting)
+for _, face in ipairs({"Bk", "Dn", "Ft", "Lf", "Rt", "Up"}) do
+	sky1["Skybox"..face] = "rbxassetid://133742659542849"
+end
+local cc1 = Instance.new("ColorCorrectionEffect", Lighting)
+cc1.TintColor = Color3.new(0, 0, 0)
+cc1.Brightness = -1
+TweenService:Create(cc1, TweenInfo.new(0.8), {TintColor = Color3.new(1,1,1), Brightness = 0}):Play()
+task.wait(0.8)
+cc1:Destroy()
+sky1:Destroy()
+
+-- Sky 2 main
+local sky2 = Instance.new("Sky", Lighting)
+for _, face in ipairs({"Bk", "Dn", "Ft", "Lf", "Rt", "Up"}) do
+	sky2["Skybox"..face] = "rbxassetid://129746135623487"
+end
+sky2.SunTextureId = ""
+sky2.MoonTextureId = ""
+
+local cc2 = Instance.new("ColorCorrectionEffect", Lighting)
+cc2.TintColor = Color3.new(0, 0, 0)
+cc2.Brightness = -1
+TweenService:Create(cc2, TweenInfo.new(0.8), {TintColor = Color3.new(1,1,1), Brightness = 0}):Play()
+task.delay(0.8, function() cc2:Destroy() end)
+
+-- Fake sun setup
+local sun = Instance.new("Part", workspace)
+sun.Name = "FakeSun"
+sun.Anchored, sun.CanCollide, sun.CastShadow, sun.Transparency = true, false, false, 1
+sun.Size = Vector3.new(1, 1, 1)
+
+local sunGui = Instance.new("BillboardGui", sun)
+sunGui.Name = "SunBillboard"
+sunGui.Size = UDim2.new(0, 3000, 0, 3000)
+sunGui.AlwaysOnTop = true
+sunGui.LightInfluence = 0
+
+local sunImage = Instance.new("ImageLabel", sunGui)
+sunImage.Size = UDim2.new(1, 0, 1, 0)
+sunImage.BackgroundTransparency = 1
+sunImage.Image = "rbxassetid://0"
+
+-- X-ray filtering
+local function isValidTarget(part)
+	if not part:IsA("BasePart") or not part.Anchored then return false end
+	local model = part:FindFirstAncestorOfClass("Model")
+	if model and model:FindFirstChildOfClass("Humanoid") then return false end
+	for _, plr in ipairs(Players:GetPlayers()) do
+		if plr.Character and part:IsDescendantOf(plr.Character) then return false end
+	end
+	return true
+end
+
+local hiddenParts = {}
+for _, p in ipairs(workspace:GetDescendants()) do
+	if isValidTarget(p) then
+		p.Transparency, p.CastShadow = 1, false
+		table.insert(hiddenParts, p)
+	end
+end
+
+local xrayConn = RunService.Stepped:Connect(function()
+	for _, p in ipairs(hiddenParts) do
+		if p:IsA("BasePart") then
+			p.Transparency = 1
+			p.CastShadow = false
+		end
+	end
+end)
+
+local sunConn = RunService.RenderStepped:Connect(function()
+	local cam = workspace.CurrentCamera
+	if cam then
+		sun.Position = cam.CFrame.Position + Lighting:GetSunDirection() * 10000
+	end
+end)
+
+task.delay(9, function()
+	sky2:Destroy()
+	if savedSky then savedSky.Parent = Lighting end
+
+	for _, p in ipairs(hiddenParts) do
+		if p:IsA("BasePart") then
+			p.Transparency = 0
+			p.CastShadow = true
+		end
+	end
+
+	xrayConn:Disconnect()
+	sunConn:Disconnect()
+
+	local gui = sun:FindFirstChild("SunBillboard")
+	if gui then gui:Destroy() end
+
+	for _, e in ipairs(Lighting:GetChildren()) do
+		if e:IsA("ColorCorrectionEffect") then e:Destroy() end
+	end
+end)
+
+-- --- FINAL AUDIO (sped up & quieter) ---
+task.wait(8.5)
+local finalSoundId = "7486846874"
+local finalSound = Instance.new("Sound")
+finalSound.SoundId = "rbxassetid://" .. finalSoundId
+finalSound.Parent = workspace
+finalSound.Volume = 3  -- slightly quieter
+finalSound:Play()
+finalSound.PlaybackSpeed = 1.4
+finalSound.TimePosition = 0
