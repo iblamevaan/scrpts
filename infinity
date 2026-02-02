@@ -3,10 +3,10 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
-local FREEZE_START_DISTANCE = 13
-local WALL_DISTANCE = 5
-local PUSH_FORCE = 100000
-local PUSH_OUT_SPEED = 40
+local FREEZE_START_DISTANCE = 15
+local WALL_DISTANCE = 10
+local PUSH_FORCE = 1000000
+local PUSH_OUT_SPEED = 60
 
 local function getNearbyUnanchoredParts(centerPos, range)
 	local region = Region3.new(
