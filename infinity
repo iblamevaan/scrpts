@@ -1,18 +1,15 @@
--- infinity function
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
-local FREEZE_START_DISTANCE = 13
-local WALL_DISTANCE = 5
+-- Infinity script settings
+local FREEZE_START_DISTANCE = 3000  -- Increased distance (was 1000)
+local WALL_DISTANCE = 1
 local PUSH_FORCE = 100000
-local PUSH_OUT_SPEED = 40
+local PUSH_OUT_SPEED = 150
 
 local function getNearbyUnanchoredParts(centerPos, range)
-	local region = Region3.new(
-		centerPos - Vector3.new(range, range, range),
-		centerPos + Vector3.new(range, range, range)
-	)
+	local region = Region3.new(centerPos - Vector3.new(range, range, range), centerPos + Vector3.new(range, range, range))
 	local parts = workspace:FindPartsInRegion3WithIgnoreList(region, {player.Character}, math.huge)
 	local valid = {}
 
@@ -47,21 +44,16 @@ local function heartbeatStep()
 			velocityControl = Instance.new("BodyVelocity")
 			velocityControl.Name = "RepelForce"
 			velocityControl.MaxForce = Vector3.new(PUSH_FORCE, PUSH_FORCE, PUSH_FORCE)
-			velocityControl.P = 10000
+			velocityControl.P = 4000000
 			velocityControl.Parent = part
 		end
 
 		if distance <= WALL_DISTANCE then
 			local direction = offset.Unit
 			velocityControl.Velocity = direction * PUSH_OUT_SPEED
-
 		elseif distance <= FREEZE_START_DISTANCE then
 			local currentVelocity = part.AssemblyLinearVelocity
-			local factor = math.clamp(
-				(distance - WALL_DISTANCE) / (FREEZE_START_DISTANCE - WALL_DISTANCE),
-				0,
-				1
-			)
+			local factor = math.clamp((distance - WALL_DISTANCE) / (FREEZE_START_DISTANCE - WALL_DISTANCE), 0, 1)
 			velocityControl.Velocity = currentVelocity * factor
 		else
 			if velocityControl then
@@ -72,27 +64,25 @@ local function heartbeatStep()
 end
 
 -- Run loop
-local conn
-conn = RunService.Heartbeat:Connect(heartbeatStep)
+local conn = RunService.Heartbeat:Connect(heartbeatStep)
 
--- Stop if player resets or dies
+-- Stop everything on respawn or death
 local function stopScript()
 	active = false
 	if conn then conn:Disconnect() end
+
+	for _, part in ipairs(workspace:GetDescendants()) do
+		if part:IsA("BodyVelocity") and part.Name == "RepelForce" then
+			part:Destroy()
+		end
+	end
 end
 
 player.CharacterAdded:Connect(stopScript)
-
-if player.Character then
-	local hum = player.Character:FindFirstChild("Humanoid")
-	if hum then
-		hum.Died:Connect(stopScript)
-	end
+if player.Character and player.Character:FindFirstChild("Humanoid") then
+	player.Character:FindFirstChild("Humanoid").Died:Connect(stopScript)
 end
-
 player.CharacterAdded:Connect(function(char)
 	local hum = char:WaitForChild("Humanoid", 5)
-	if hum then
-		hum.Died:Connect(stopScript)
-	end
+	if hum then hum.Died:Connect(stopScript) end
 end)
