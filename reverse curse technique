@@ -1,0 +1,35 @@
+-- Passive Reverse Cursed Technique (Executor Safe)
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+
+local HEAL_PER_SECOND = 60 -- FAST regen
+local MIN_HEALTH_PERCENT = 0 -- heal even at very low HP
+
+local function applyRCT(character)
+	local humanoid = character:WaitForChild("Humanoid")
+
+	local conn
+	conn = RunService.Heartbeat:Connect(function(dt)
+		if not humanoid or humanoid.Health <= 0 then
+			if conn then conn:Disconnect() end
+			return
+		end
+
+		humanoid.Health = math.clamp(
+			humanoid.Health + HEAL_PER_SECOND * dt,
+			0,
+			humanoid.MaxHealth
+		)
+	end)
+end
+
+-- Apply to current character
+if player.Character then
+	applyRCT(player.Character)
+end
+
+-- Reapply on respawn
+player.CharacterAdded:Connect(applyRCT)
