@@ -1,12 +1,12 @@
--- Passive Reverse Cursed Technique (Executor Safe, 100 HP/sec)
+-- Passive Smooth Reverse Cursed Technique (Fast Healing)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 
-local HEAL_PER_SECOND = 100 -- MAXIMUM HEALING
-local MIN_HEALTH_PERCENT = 0 -- heal even at very low HP
+-- Adjust heal speed here (higher = faster)
+local HEAL_SPEED = 500  -- HP per second
 
 local function applyRCT(character)
 	local humanoid = character:WaitForChild("Humanoid")
@@ -18,8 +18,9 @@ local function applyRCT(character)
 			return
 		end
 
+		-- Smooth healing per frame
 		humanoid.Health = math.clamp(
-			humanoid.Health + HEAL_PER_SECOND * dt,
+			humanoid.Health + HEAL_SPEED * dt,
 			0,
 			humanoid.MaxHealth
 		)
