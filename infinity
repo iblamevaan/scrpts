@@ -1,0 +1,98 @@
+-- infinity function
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+local FREEZE_START_DISTANCE = 13
+local WALL_DISTANCE = 5
+local PUSH_FORCE = 100000
+local PUSH_OUT_SPEED = 40
+
+local function getNearbyUnanchoredParts(centerPos, range)
+	local region = Region3.new(
+		centerPos - Vector3.new(range, range, range),
+		centerPos + Vector3.new(range, range, range)
+	)
+	local parts = workspace:FindPartsInRegion3WithIgnoreList(region, {player.Character}, math.huge)
+	local valid = {}
+
+	for _, part in ipairs(parts) do
+		if part:IsA("BasePart") and not part.Anchored and not part:IsDescendantOf(player.Character) then
+			table.insert(valid, part)
+		end
+	end
+	return valid
+end
+
+local active = true
+
+local function heartbeatStep()
+	if not active then return end
+
+	local character = player.Character
+	if not character then return end
+
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	local playerPos = hrp.Position
+	local parts = getNearbyUnanchoredParts(playerPos, FREEZE_START_DISTANCE + 5)
+
+	for _, part in ipairs(parts) do
+		local offset = part.Position - playerPos
+		local distance = offset.Magnitude
+
+		local velocityControl = part:FindFirstChild("RepelForce")
+		if not velocityControl then
+			velocityControl = Instance.new("BodyVelocity")
+			velocityControl.Name = "RepelForce"
+			velocityControl.MaxForce = Vector3.new(PUSH_FORCE, PUSH_FORCE, PUSH_FORCE)
+			velocityControl.P = 10000
+			velocityControl.Parent = part
+		end
+
+		if distance <= WALL_DISTANCE then
+			local direction = offset.Unit
+			velocityControl.Velocity = direction * PUSH_OUT_SPEED
+
+		elseif distance <= FREEZE_START_DISTANCE then
+			local currentVelocity = part.AssemblyLinearVelocity
+			local factor = math.clamp(
+				(distance - WALL_DISTANCE) / (FREEZE_START_DISTANCE - WALL_DISTANCE),
+				0,
+				1
+			)
+			velocityControl.Velocity = currentVelocity * factor
+		else
+			if velocityControl then
+				velocityControl:Destroy()
+			end
+		end
+	end
+end
+
+-- Run loop
+local conn
+conn = RunService.Heartbeat:Connect(heartbeatStep)
+
+-- Stop if player resets or dies
+local function stopScript()
+	active = false
+	if conn then conn:Disconnect() end
+end
+
+player.CharacterAdded:Connect(stopScript)
+
+if player.Character then
+	local hum = player.Character:FindFirstChild("Humanoid")
+	if hum then
+		hum.Died:Connect(stopScript)
+	end
+end
+
+player.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid", 5)
+	if hum then
+		hum.Died:Connect(stopScript)
+	end
+end)
