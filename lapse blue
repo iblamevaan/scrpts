@@ -21,10 +21,10 @@ local BALL_SIZE = 15
 local FADE_TIME = 1.5
 local SPIN_DURATION = 3
 local PULL_RADIUS = 25
-local PULL_STRENGTH = 99999
-local AIM_INITIAL_SPEED = 50
-local AIM_MAX_SPEED = 200
-local ACCEL_EASE = 2.5 -- easing factor for smooth acceleration
+local PULL_STRENGTH = 255
+local AIM_INITIAL_SPEED = 55
+local AIM_MAX_SPEED = 215
+local ACCEL_EASE = 2.7 -- easing factor for smooth acceleration
 local AUDIO_ID = "116351856399704" -- example magical sound
 
 -- Variables
