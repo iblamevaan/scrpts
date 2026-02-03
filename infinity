@@ -3,8 +3,8 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
-local FREEZE_START_DISTANCE = 15
-local WALL_DISTANCE = 10
+local FREEZE_START_DISTANCE = 12
+local WALL_DISTANCE = 7
 local PUSH_FORCE = 99999999
 local PUSH_OUT_SPEED = 80
 
