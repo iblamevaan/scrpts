@@ -91,7 +91,7 @@ local function InfiniteVoid()
 
 	local sky = Instance.new("Sky", Lighting)
 	for _, f in ipairs({"Bk","Dn","Ft","Lf","Rt","Up"}) do
-		sky["Skybox"..f] = "rbxassetid://6444320592"
+		sky["Skybox"..f] = "rbxassetid://159454299"
 	end
 
 	local cc = Instance.new("ColorCorrectionEffect", Lighting)
