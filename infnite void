@@ -25,7 +25,7 @@ local function InfiniteVoid()
 	local startSound = Instance.new("Sound")
 	startSound.SoundId = "rbxassetid://96616607755426"
 	startSound.Volume = 3
-	startSound.PlaybackSpeed = 1.4
+	startSound.PlaybackSpeed = 1
 	startSound.Parent = workspace
 	startSound:Play()
 
@@ -91,7 +91,7 @@ local function InfiniteVoid()
 
 	local sky = Instance.new("Sky", Lighting)
 	for _, f in ipairs({"Bk","Dn","Ft","Lf","Rt","Up"}) do
-		sky["Skybox"..f] = "rbxassetid://129746135623487"
+		sky["Skybox"..f] = "rbxassetid://159454299"
 	end
 
 	local cc = Instance.new("ColorCorrectionEffect", Lighting)
@@ -146,7 +146,7 @@ local function InfiniteVoid()
 		local endSound = Instance.new("Sound")
 		endSound.SoundId = "rbxassetid://7486846874"
 		endSound.Volume = 3
-		endSound.PlaybackSpeed = 1.4
+		endSound.PlaybackSpeed = 1
 		endSound.Parent = workspace
 		endSound:Play()
 	end)
