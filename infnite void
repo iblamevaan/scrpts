@@ -75,7 +75,7 @@ local function InfiniteVoid()
 			if distance <= WALL_DISTANCE then
 				bv.Velocity = offset.Unit * PUSH_OUT_SPEED
 			else
-				bv.Velocity = part.AssemblyLinearVelocity * 0
+				bv.Velocity = Vector3.zero
 			end
 		end
 	end)
@@ -108,9 +108,11 @@ local function InfiniteVoid()
 	local hidden = {}
 	for _, p in ipairs(workspace:GetDescendants()) do
 		if p:IsA("BasePart") and p.Anchored then
+			table.insert(hidden, {
+				Part = p,
+				OriginalTransparency = p.Transparency
+			})
 			p.Transparency = 1
-			p.CastShadow = false
-			table.insert(hidden, p)
 		end
 	end
 
@@ -127,10 +129,11 @@ local function InfiniteVoid()
 			end
 		end
 
-		for _, p in ipairs(hidden) do
+		-- restore original transparency
+		for _, data in ipairs(hidden) do
+			local p = data.Part
 			if p:IsA("BasePart") then
-				p.Transparency = 0
-				p.CastShadow = true
+				p.Transparency = data.OriginalTransparency
 			end
 		end
 
