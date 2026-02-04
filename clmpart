@@ -1,0 +1,41 @@
+-- Grab ownership of parts and make them controllable
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+
+local client = Players.LocalPlayer
+client.ReplicationFocus = workspace
+
+-- Optional: expand simulation radius so you can control distant parts
+if typeof(sethiddenproperty) == "function" then
+    RunService.Heartbeat:Connect(function()
+        sethiddenproperty(client, "SimulationRadius", math.huge)
+    end)
+else
+    warn("[Claim Parts] sethiddenproperty not supported; may not control distant parts")
+end
+
+-- Function to check if part is "claimable"
+local function isClaimable(part)
+    return part:IsA("BasePart") 
+       and not part.Anchored 
+       and part.CanCollide 
+       and part.Size.Magnitude > 0.1
+end
+
+-- Function to claim/control a part
+local function claimPart(part)
+    if isClaimable(part) then
+        -- Just touching it or being close gives you ownership naturally
+        -- No force applied, just ensure you’re near and part is unanchored
+        -- Optionally you can mark or store it if needed
+    end
+end
+
+-- Claim all current parts
+for _, part in pairs(workspace:GetDescendants()) do
+    claimPart(part)
+end
+
+-- Claim any new parts that spawn
+workspace.DescendantAdded:Connect(claimPart)
