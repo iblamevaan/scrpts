@@ -38,184 +38,179 @@ local aimingPhase = false
 local aimPosition = nil
 local aimProgress = 0 -- 0-1 for easing
 local aimCurrentSpeed = AIM_INITIAL_SPEED
-local pulledParts = {} -- keeps track of already pulled parts
 local ballSound = nil
 
 -- Create spinning ball
 local function createBall()
-	local part = Instance.new("Part")
-	part.Shape = Enum.PartType.Ball
-	part.Size = Vector3.new(BALL_SIZE, BALL_SIZE, BALL_SIZE)
-	part.Material = Enum.Material.Neon
-	part.Color = Color3.fromRGB(0, 162, 255)
-	part.Anchored = true
-	part.CanCollide = false
-	part.Parent = Workspace
+    local part = Instance.new("Part")
+    part.Shape = Enum.PartType.Ball
+    part.Size = Vector3.new(BALL_SIZE, BALL_SIZE, BALL_SIZE)
+    part.Material = Enum.Material.Neon
+    part.Color = Color3.fromRGB(0, 162, 255)
+    part.Anchored = true
+    part.CanCollide = false
+    part.Parent = Workspace
 
-	local light = Instance.new("PointLight")
-	light.Color = part.Color
-	light.Brightness = 2
-	light.Range = 8
-	light.Parent = part
+    local light = Instance.new("PointLight")
+    light.Color = part.Color
+    light.Brightness = 2
+    light.Range = 8
+    light.Parent = part
 
-	-- Add audio
-	local sound = Instance.new("Sound")
-	sound.SoundId = "rbxassetid://"..AUDIO_ID
-	sound.Looped = true
-	sound.Volume = 2
-	sound.Parent = part
-	sound:Play()
-	ballSound = sound
+    -- Add audio
+    local sound = Instance.new("Sound")
+    sound.SoundId = "rbxassetid://"..AUDIO_ID
+    sound.Looped = true
+    sound.Volume = 4
+    sound.Parent = part
+    sound:Play()
+    ballSound = sound
 
-	return part, light
+    return part, light
 end
 
 -- Pull unanchored parts near a position
 local function pullParts(center)
-	local params = OverlapParams.new()
-	params.FilterDescendantsInstances = {player.Character, spinningBall}
-	params.FilterType = Enum.RaycastFilterType.Blacklist
+    local params = OverlapParams.new()
+    params.FilterDescendantsInstances = {player.Character, spinningBall}
+    params.FilterType = Enum.RaycastFilterType.Blacklist
 
-	local parts = Workspace:GetPartBoundsInRadius(center, PULL_RADIUS, params)
-	for _, part in ipairs(parts) do
-		if part:IsA("BasePart") and not part.Anchored then
-			if not pulledParts[part] then
-				pulledParts[part] = true
-			end
-			pcall(function() part:SetNetworkOwner(player) end)
-			local direction = center - part.Position
-			if direction.Magnitude > 0 then
-				part.AssemblyLinearVelocity = direction.Unit * PULL_STRENGTH
-			end
-		end
-	end
+    local parts = Workspace:GetPartBoundsInRadius(center, PULL_RADIUS, params)
+    for _, part in ipairs(parts) do
+        if part:IsA("BasePart") and not part.Anchored then
+            local direction = center - part.Position
+            if direction.Magnitude > 0 then
+                part.AssemblyLinearVelocity = direction.Unit * PULL_STRENGTH
+            end
+        end
+    end
 end
 
--- Get mouse surface hit (ignores player + ball + pulled parts)
+-- Get mouse surface hit (ignores player, the ball, and only unanchored parts being pulled)
 local function getMouseSurfaceHit()
-	local mouse = player:GetMouse()
-	local origin = camera.CFrame.Position
-	local direction = (mouse.UnitRay.Direction).Unit * 1000
+    local mouse = player:GetMouse()
+    local origin = camera.CFrame.Position
+    local direction = (mouse.UnitRay.Direction).Unit * 1000
 
-	local rayParams = RaycastParams.new()
-	local ignoreList = {player.Character}
-	if spinningBall then
-		table.insert(ignoreList, spinningBall)
-	end
-	for part, _ in pairs(pulledParts) do
-		table.insert(ignoreList, part)
-	end
-	rayParams.FilterDescendantsInstances = ignoreList
-	rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+    local rayParams = RaycastParams.new()
+    local ignoreList = {player.Character}
+    if spinningBall then
+        table.insert(ignoreList, spinningBall)
+    end
+    rayParams.FilterDescendantsInstances = ignoreList
+    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 
-	local result = workspace:Raycast(origin, direction, rayParams)
-	if result and result.Instance then
-		return result.Position
-	end
-	return nil
+    local result = workspace:Raycast(origin, direction, rayParams)
+    if result and result.Instance then
+        -- Only ignore unanchored parts currently inside pull radius
+        if spinningBall and not result.Instance.Anchored and (result.Position - spinningBall.Position).Magnitude <= PULL_RADIUS then
+            return nil
+        end
+        return result.Position
+    end
+    return nil
 end
 
 -- Update loop
 RunService.RenderStepped:Connect(function(dt)
-	if spinningBall then
-		-- Continuous pull
-		pullParts(spinningBall.Position)
+    if spinningBall then
+        -- Continuous pull
+        pullParts(spinningBall.Position)
 
-		if not aimingPhase then
-			-- Phase 1: Spin + wobble around player
-			ballAngle += ORBIT_SPEED * dt
-			ballHeightOffset += UP_DOWN_SPEED * dt
-			local wobble = math.sin(tick()*5) * WOBBLE_INTENSITY
-			local pos = root.Position + Vector3.new(
-				math.cos(ballAngle) * ORBIT_RADIUS,
-				math.sin(ballHeightOffset) * UP_DOWN_RANGE + 3 + wobble,
-				math.sin(ballAngle) * ORBIT_RADIUS
-			)
-			spinningBall.Position = pos
+        if not aimingPhase then
+            -- Phase 1: Spin + wobble around player
+            ballAngle += ORBIT_SPEED * dt
+            ballHeightOffset += UP_DOWN_SPEED * dt
+            local wobble = math.sin(tick()*5) * WOBBLE_INTENSITY
+            local pos = root.Position + Vector3.new(
+                math.cos(ballAngle) * ORBIT_RADIUS,
+                math.sin(ballHeightOffset) * UP_DOWN_RANGE + 3 + wobble,
+                math.sin(ballAngle) * ORBIT_RADIUS
+            )
+            spinningBall.Position = pos
 
-			-- Start aiming phase after spin duration
-			if tick() - spinStartTime >= SPIN_DURATION then
-				aimingPhase = true
-				aimCurrentSpeed = AIM_INITIAL_SPEED
-				aimProgress = 0
-				local hit = getMouseSurfaceHit()
-				if hit then
-					aimPosition = hit
-				else
-					aimPosition = spinningBall.Position
-				end
-			end
-		else
-			-- Phase 2: Move toward mouse surface with easing
-			local hit = getMouseSurfaceHit()
-			if hit then
-				aimPosition = hit
-			end
+            -- Start aiming phase after spin duration
+            if tick() - spinStartTime >= SPIN_DURATION then
+                aimingPhase = true
+                aimCurrentSpeed = AIM_INITIAL_SPEED
+                aimProgress = 0
+                local hit = getMouseSurfaceHit()
+                if hit then
+                    aimPosition = hit
+                else
+                    aimPosition = spinningBall.Position
+                end
+            end
+        else
+            -- Phase 2: Move toward mouse surface with easing
+            local hit = getMouseSurfaceHit()
+            if hit then
+                aimPosition = hit
+            end
 
-			if aimPosition then
-				local currentPos = spinningBall.Position
-				local direction = aimPosition - currentPos
-				local distance = direction.Magnitude
-				if distance > 0.1 then
-					-- easing acceleration
-					aimProgress = math.clamp(aimProgress + dt * ACCEL_EASE, 0, 1)
-					local speed = AIM_INITIAL_SPEED + (AIM_MAX_SPEED - AIM_INITIAL_SPEED) * aimProgress^2
-					aimCurrentSpeed = speed
-					spinningBall.Position = currentPos + direction.Unit * math.min(speed * dt, distance)
-				end
-			end
-		end
-	end
+            if aimPosition then
+                local currentPos = spinningBall.Position
+                local direction = aimPosition - currentPos
+                local distance = direction.Magnitude
+                if distance > 0.1 then
+                    -- easing acceleration
+                    aimProgress = math.clamp(aimProgress + dt * ACCEL_EASE, 0, 1)
+                    local speed = AIM_INITIAL_SPEED + (AIM_MAX_SPEED - AIM_INITIAL_SPEED) * aimProgress^2
+                    aimCurrentSpeed = speed
+                    spinningBall.Position = currentPos + direction.Unit * math.min(speed * dt, distance)
+                end
+            end
+        end
+    end
 end)
 
 -- Start spin when Z is pressed
 UserInputService.InputBegan:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == Enum.KeyCode.Z and not holdingZ then
-		holdingZ = true
-		spinStartTime = tick()
-		aimingPhase = false
-		pulledParts = {} -- reset pulled parts
-		spinningBall, spinningLight = createBall()
-		ballAngle = math.random() * math.pi * 2
-		ballHeightOffset = math.random() * math.pi * 2
-	end
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Z and not holdingZ then
+        holdingZ = true
+        spinStartTime = tick()
+        aimingPhase = false
+        spinningBall, spinningLight = createBall()
+        ballAngle = math.random() * math.pi * 2
+        ballHeightOffset = math.random() * math.pi * 2
+    end
 end)
 
 -- Release Z to finalize pull and fade
 UserInputService.InputEnded:Connect(function(input, gp)
-	if gp then return end
-	if input.KeyCode == Enum.KeyCode.Z and holdingZ then
-		holdingZ = false
-		if spinningBall then
-			local finalPosition = spinningBall.Position
-			pullParts(finalPosition)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.Z and holdingZ then
+        holdingZ = false
+        if spinningBall then
+            local finalPosition = spinningBall.Position
+            pullParts(finalPosition)
 
-			-- Stop sound
-			if ballSound then
-				ballSound:Stop()
-			end
+            -- Stop sound
+            if ballSound then
+                ballSound:Stop()
+            end
 
-			-- Fade out
-			local fadeStart = tick()
-			local partToFade = spinningBall
-			local lightToFade = spinningLight
-			spinningBall = nil
-			spinningLight = nil
-			aimingPhase = false
+            -- Fade out
+            local fadeStart = tick()
+            local partToFade = spinningBall
+            local lightToFade = spinningLight
+            spinningBall = nil
+            spinningLight = nil
+            aimingPhase = false
 
-			task.spawn(function()
-				while partToFade and partToFade.Parent do
-					local alpha = math.clamp((tick() - fadeStart) / FADE_TIME, 0, 1)
-					partToFade.Transparency = alpha
-					lightToFade.Brightness = 2 * (1 - alpha)
-					if alpha >= 1 then
-						partToFade:Destroy()
-						break
-					end
-					task.wait()
-				end
-			end)
-		end
-	end
+            task.spawn(function()
+                while partToFade and partToFade.Parent do
+                    local alpha = math.clamp((tick() - fadeStart) / FADE_TIME, 0, 1)
+                    partToFade.Transparency = alpha
+                    lightToFade.Brightness = 2 * (1 - alpha)
+                    if alpha >= 1 then
+                        partToFade:Destroy()
+                        break
+                    end
+                    task.wait()
+                end
+            end)
+        end
+    end
 end)
