@@ -1,11 +1,15 @@
---Infinite void
+-- Infinite void
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
 
 local player = Players.LocalPlayer
 local currentTrack = nil
 
+------------------------------------------------
+-- ANIMATION
+------------------------------------------------
 local function playAnimation()
 	local character = player.Character
 	if not character then return end
@@ -13,7 +17,6 @@ local function playAnimation()
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then return end
 
-	-- stop previous animation if playing
 	if currentTrack then
 		pcall(function()
 			currentTrack:Stop(0)
@@ -50,11 +53,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
-local Players = game:GetService("Players")
+------------------------------------------------
+-- MAIN SYSTEM
+------------------------------------------------
 local UIS = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 
-local player = Players.LocalPlayer
 local camera = workspace.CurrentCamera
 
 local character = player.Character or player.CharacterAdded:Wait()
@@ -63,9 +66,7 @@ local humanoid
 local enabled = false
 local activeSounds = 0
 
-local camConnection
 local moveConnection
-
 local oldAutoRotate = true
 
 ------------------------------------------------
@@ -87,95 +88,18 @@ local function playSound(parent, soundId)
 end
 
 ------------------------------------------------
--- CAMERA HELPERS
+-- CAMERA FUNCTIONS (REMOVED EFFECTS)
 ------------------------------------------------
-local function setBehindCamera()
-	if not character or not humanoid then return end
-
-	local root = character:FindFirstChild("HumanoidRootPart")
-	if not root then return end
-
-	local forward = root.CFrame.LookVector
-	forward = Vector3.new(forward.X, 0, forward.Z)
-
-	if forward.Magnitude == 0 then return end
-	forward = forward.Unit
-
-	local camPos = root.Position - forward * 8 + Vector3.new(0, 3, 0)
-	local lookAt = root.Position + Vector3.new(0, 2, 0)
-
-	camera.CFrame = CFrame.new(camPos, lookAt)
+local function startCinematic()
+	-- Camera changes removed (intentionally empty)
 end
 
 local function endCinematic()
-	if camConnection then
-		camConnection:Disconnect()
-		camConnection = nil
-	end
-
-	-- restore movement control
-	if humanoid then
-		humanoid.AutoRotate = oldAutoRotate
-	end
-
-	-- switch back to Roblox camera
-	camera.CameraType = Enum.CameraType.Custom
-	camera.CameraSubject = humanoid
-
-	-- place camera nicely behind player
-	setBehindCamera()
-
-	-- restore input control
-	player.CameraMode = Enum.CameraMode.Classic
-	UIS.MouseBehavior = Enum.MouseBehavior.Default
+	-- Camera restore removed (intentionally empty)
 end
 
 ------------------------------------------------
--- CINEMATIC CAMERA
-------------------------------------------------
-local function startCinematic()
-	camera.CameraType = Enum.CameraType.Scriptable
-	camera.CameraSubject = humanoid
-
-	player.CameraMode = Enum.CameraMode.Classic
-	UIS.MouseBehavior = Enum.MouseBehavior.Default
-
-	if camConnection then
-		camConnection:Disconnect()
-	end
-
-	camConnection = RunService.RenderStepped:Connect(function()
-		if not character or not humanoid then return end
-
-		local root = character:FindFirstChild("HumanoidRootPart")
-		if not root then return end
-
-		local forward = root.CFrame.LookVector
-		forward = Vector3.new(forward.X, 0, forward.Z)
-
-		if forward.Magnitude == 0 then return end
-		forward = forward.Unit
-
-		local right = Vector3.new(-forward.Z, 0, forward.X)
-
-		local distance = 7
-		local leftOffset = 0
-		local heightOffset = 1
-
-		local camPos =
-			root.Position
-			+ forward * distance
-			+ right * leftOffset
-			+ Vector3.new(0, heightOffset, 0)
-
-		local lookAt = root.Position + Vector3.new(0, 1.8, 0)
-
-		camera.CFrame = CFrame.new(camPos, lookAt)
-	end)
-end
-
-------------------------------------------------
--- MOVEMENT CANCEL CHECK
+-- MOVEMENT WATCH
 ------------------------------------------------
 local function startMovementWatch()
 	if moveConnection then
@@ -196,7 +120,7 @@ end
 -- ACTIVATE / DEACTIVATE
 ------------------------------------------------
 local function activate()
-	humanoid = character:FindFirstChild("Humanoid")
+	humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then return end
 
 	oldAutoRotate = humanoid.AutoRotate
@@ -223,7 +147,7 @@ function deactivate()
 end
 
 ------------------------------------------------
--- INPUT
+-- INPUT TOGGLE
 ------------------------------------------------
 UIS.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
@@ -240,7 +164,7 @@ UIS.InputBegan:Connect(function(input, gameProcessed)
 end)
 
 ------------------------------------------------
--- AUTO END (sounds finished)
+-- AUTO END
 ------------------------------------------------
 RunService.RenderStepped:Connect(function()
 	if enabled and activeSounds <= 0 then
@@ -266,17 +190,15 @@ if player.Character then
 	setCharacter(player.Character)
 end
 
--- LocalScript (StarterPlayerScripts)
 
-local UserInputService = game:GetService("UserInputService")
-local Players = game:GetService("Players")
+---------------------------------------------------------------------
+-- SECOND SCRIPT (LIGHTING / SKY / GHOST MODE) - UNCHANGED
+---------------------------------------------------------------------
+
 local Lighting = game:GetService("Lighting")
-
-local player = Players.LocalPlayer
 
 local SOUND_ID = "rbxassetid://129909595922206"
 
--- save original sky
 local originalSky = Lighting:FindFirstChildOfClass("Sky")
 if originalSky then
 	originalSky = originalSky:Clone()
@@ -288,7 +210,7 @@ end
 local function playSound()
 	local sound = Instance.new("Sound")
 	sound.SoundId = SOUND_ID
-	sound.Volume = 7 -- updated volume
+	sound.Volume = 7
 	sound.RollOffMaxDistance = 10000
 	sound.Parent = workspace
 
@@ -330,10 +252,10 @@ local function restoreSky(newSky)
 end
 
 ---------------------------------------------------
--- REMOVE SUN / MOON EFFECT
+-- LIGHTING EFFECTS
 ---------------------------------------------------
 local function hideSunMoon()
-	Lighting.ClockTime = 0 -- forces night-like state
+	Lighting.ClockTime = 0
 	Lighting.Brightness = 0
 
 	local atm = Lighting:FindFirstChildOfClass("Atmosphere")
@@ -343,12 +265,12 @@ local function hideSunMoon()
 end
 
 local function restoreLighting()
-	Lighting.ClockTime = 14 -- default daytime feel (can be changed)
+	Lighting.ClockTime = 14
 	Lighting.Brightness = 2
 end
 
 ---------------------------------------------------
--- WORLD VISIBILITY
+-- WORLD TRANSPARENCY
 ---------------------------------------------------
 local function setWorldTransparency(value)
 	local stored = {}
