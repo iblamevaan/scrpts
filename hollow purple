@@ -1,224 +1,464 @@
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-local character = player.Character or player.CharacterAdded:Wait()
-local root = character:WaitForChild("HumanoidRootPart")
+local currentTrack = nil
 
-local canCast = true -- cooldown flag
+local function playAnimation()
+	local character = player.Character
+	if not character then return end
 
--- Fire effect function
-local function addFireEffect(part, color)
-	local fire = Instance.new("Fire")
-	fire.Color = color
-	fire.SecondaryColor = color
-	fire.Heat = 10
-	fire.Size = part.Size.X * 2
-	fire.Parent = part
-end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
 
--- Ball creation function
-local function createBall(color, size, canCollide)
-	local ball = Instance.new("Part")
-	ball.Shape = Enum.PartType.Ball
-	ball.Size = size
-	ball.Anchored = false
-	ball.CanCollide = canCollide
-	ball.Material = Enum.Material.Neon
-	ball.Color = color
-	ball.Name = "PurpleBall"
-	ball.Parent = workspace
-	addFireEffect(ball, color)
-
-	local antiGravity = Instance.new("BodyForce")
-	antiGravity.Force = Vector3.new(0, ball:GetMass() * workspace.Gravity, 0)
-	antiGravity.Parent = ball
-
-	return ball
-end
-
--- Side block function
-local function createSideBlock(position)
-	local block = Instance.new("Part")
-	block.Size = Vector3.new(12, 12, 12)
-	block.Anchored = true
-	block.CanCollide = false
-	block.Material = Enum.Material.SmoothPlastic
-
-	local rayOrigin = position
-	local rayDirection = Vector3.new(0, -100, 0)
-	local raycastParams = RaycastParams.new()
-	raycastParams.FilterDescendantsInstances = {}
-	raycastParams.FilterType = Enum.RaycastFilterType.Blacklist
-
-	local result = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-	if result and result.Instance and result.Instance:IsA("BasePart") then
-		block.Color = result.Instance.Color
-	else
-		block.Color = Color3.fromRGB(200, 200, 200)
+	-- stop previous animation if playing
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop(0)
+		end)
+		currentTrack = nil
 	end
 
-	block.CFrame = CFrame.new(position) * CFrame.Angles(
-		math.rad(math.random(0, 360)),
-		math.rad(math.random(0, 360)),
-		math.rad(math.random(0, 360))
-	)
+	local ok, track = pcall(function()
+		return humanoid:PlayEmoteAndGetAnimTrackById(85641700867993)
+	end)
 
-	block.Parent = workspace
+	if not ok or not track then return end
 
-	local goal = { Position = block.Position - Vector3.new(0, 7, 0) }
-	local tween = TweenService:Create(block, TweenInfo.new(0.8, Enum.EasingStyle.Sine), goal)
-	tween:Play()
-	tween.Completed:Connect(function()
-		block:Destroy()
+	track.Looped = false
+	track:AdjustSpeed(2)
+
+	currentTrack = track
+
+	task.delay(3, function()
+		if currentTrack then
+			pcall(function()
+				currentTrack:Stop(0)
+			end)
+			currentTrack = nil
+		end
 	end)
 end
 
--- Function to run the effect
-local function triggerPurpleBall()
-	if not canCast then return end
-	canCast = false
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
 
-	-- Reset cooldown after 1 second
-	task.delay(1, function()
-		canCast = true
+	if input.KeyCode == Enum.KeyCode.C then
+		playAnimation()
+	end
+end)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local currentTrack = nil
+
+local function playAnimation()
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	-- stop previous animation if playing
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop(0)
+		end)
+		currentTrack = nil
+	end
+
+	local ok, track = pcall(function()
+		return humanoid:PlayEmoteAndGetAnimTrackById(85641700867993)
 	end)
 
-	-- Red and blue balls
-	local redBall = createBall(Color3.fromRGB(255, 0, 0), Vector3.new(6, 6, 6), true)
-	local blueBall = createBall(Color3.fromRGB(0, 0, 255), Vector3.new(6, 6, 6), true)
+	if not ok or not track then return end
 
-	-- Follow player
-	local followConnection = RunService.RenderStepped:Connect(function()
-		if root and root.Parent then
-			local back = -root.CFrame.LookVector * 5
-			local left = -root.CFrame.RightVector * 10
-			local right = root.CFrame.RightVector * 10
-			redBall.Position = root.Position + back + left + Vector3.new(0, 3, 0) -- slightly above ground
-			blueBall.Position = root.Position + back + right + Vector3.new(0, 3, 0)
+	track.Looped = false
+	track:AdjustSpeed(2)
+
+	currentTrack = track
+
+	task.delay(3, function()
+		if currentTrack then
+			pcall(function()
+				currentTrack:Stop(0)
+			end)
+			currentTrack = nil
 		end
 	end)
+end
 
-	-- Wait then merge
-	task.wait(3)
-	followConnection:Disconnect()
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
 
-	local mergePos = root.Position + root.CFrame.LookVector * 25 + Vector3.new(0, 5, 0) -- spawn slightly above ground
-	local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Sine)
-	TweenService:Create(redBall, tweenInfo, {Position = mergePos}):Play()
-	TweenService:Create(blueBall, tweenInfo, {Position = mergePos}):Play()
-	task.wait(1)
-	redBall:Destroy()
-	blueBall:Destroy()
+	if input.KeyCode == Enum.KeyCode.C then
+		playAnimation()
+	end
+end)
 
-	-- Purple ball
-	local purpleBall = createBall(Color3.fromRGB(228, 0, 228), Vector3.new(48, 48, 48), false)
-	purpleBall.Position = mergePos
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Lighting = game:GetService("Lighting")
+local TweenService = game:GetService("TweenService")
 
-	-- Play audio immediately
-	local purpleSound = Instance.new("Sound")
-	purpleSound.SoundId = "rbxassetid://97152929398060"
-	purpleSound.Volume = 5
-	purpleSound.Parent = purpleBall
-	purpleSound:Play()
+local player = Players.LocalPlayer
 
-	-- Blackhole attraction
-	local blockSpawnerConnection
-	local pullConnection
+local function getCharacter()
+	return player.Character or player.CharacterAdded:Wait()
+end
 
-	local function attractNearbyParts()
-		if not purpleBall or not purpleBall.Parent then
-			if pullConnection then
-				pullConnection:Disconnect()
-				pullConnection = nil
-			end
+------------------------------------------------
+-- PLAY SOUND AT POSITION
+------------------------------------------------
+local function playSound(id, parent)
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. id
+	sound.Volume = 3
+	sound.Parent = parent
+	sound:Play()
+	sound.Ended:Connect(function() sound:Destroy() end)
+	return sound
+end
+
+------------------------------------------------
+-- PLAY AUDIOS IN ORDER
+------------------------------------------------
+local function playAudioSequence(root)
+	local ids = {
+		"124376119930553",
+		"",
+		"",
+		"1",
+		""
+	}
+
+	task.spawn(function()
+		for _, id in ipairs(ids) do
+			if not root or not root.Parent then break end
+			local sound = playSound(id, root)
+			-- wait for this one to finish before playing next
+			sound.Ended:Wait()
+		end
+	end)
+end
+
+------------------------------------------------
+-- PLATFORM
+------------------------------------------------
+local function createPlatform(root)
+	local platform = Instance.new("Part")
+	platform.Size = Vector3.new(16, 1, 16)
+	platform.Anchored = true
+	platform.CanCollide = true
+	platform.Transparency = 1
+	platform.CFrame = CFrame.new(root.Position.X, root.Position.Y - 3.2, root.Position.Z)
+	platform.Parent = workspace
+	return platform
+end
+
+------------------------------------------------
+-- BLUE ORB
+------------------------------------------------
+local function createBlueOrb(root)
+	local orb = Instance.new("Part")
+	orb.Shape = Enum.PartType.Ball
+	orb.Material = Enum.Material.Neon
+	orb.Color = Color3.fromRGB(0, 170, 255)
+	orb.Anchored = true
+	orb.CanCollide = false
+	orb.Size = Vector3.new(8, 8, 8)
+	orb.Parent = workspace
+
+	local light = Instance.new("PointLight")
+	light.Color = orb.Color
+	light.Brightness = 10
+	light.Range = 22
+	light.Parent = orb
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(Color3.fromRGB(0, 170, 255))
+	emitter.LightEmission = 1
+	emitter.Rate = 40
+	emitter.Lifetime = NumberRange.new(0.3, 0.6)
+	emitter.Speed = NumberRange.new(1, 3)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.5),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	emitter.Parent = orb
+
+	local conn
+	conn = RunService.Heartbeat:Connect(function()
+		if not root or not root.Parent or not orb or not orb.Parent then
+			if conn then conn:Disconnect() end
+			return
+		end
+		local backOffset = root.CFrame.LookVector * -12
+		local heightOffset = Vector3.new(0, 14, 0)
+		orb.Position = root.Position + backOffset + heightOffset
+	end)
+
+	return orb, conn
+end
+
+------------------------------------------------
+-- PURPLE EXPLOSION
+------------------------------------------------
+local function purpleExplosion(position)
+	local flash = Instance.new("ColorCorrectionEffect")
+	flash.TintColor = Color3.fromRGB(180, 0, 255)
+	flash.Brightness = 2.5
+	flash.Contrast = 1.5
+	flash.Saturation = 3
+	flash.Parent = Lighting
+
+	local bloom = Instance.new("BloomEffect")
+	bloom.Intensity = 8
+	bloom.Size = 120
+	bloom.Threshold = 0
+	bloom.Parent = Lighting
+
+	local info = TweenInfo.new(1.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+	TweenService:Create(flash, info, { Brightness = 0, Contrast = 0, Saturation = 0 }):Play()
+	local t2 = TweenService:Create(bloom, info, { Intensity = 0 })
+	t2:Play()
+	t2.Completed:Connect(function()
+		flash:Destroy()
+		bloom:Destroy()
+	end)
+
+	local burst = Instance.new("Part")
+	burst.Shape = Enum.PartType.Ball
+	burst.Material = Enum.Material.Neon
+	burst.Color = Color3.fromRGB(160, 0, 255)
+	burst.Anchored = true
+	burst.CanCollide = false
+	burst.Size = Vector3.new(4, 4, 4)
+	burst.Position = position
+	burst.Parent = workspace
+
+	local burstLight = Instance.new("PointLight")
+	burstLight.Color = burst.Color
+	burstLight.Brightness = 50
+	burstLight.Range = 100
+	burstLight.Parent = burst
+
+	TweenService:Create(burst, TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+		Size = Vector3.new(40, 40, 40),
+		Transparency = 1
+	}):Play()
+
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 0, 200))
+	})
+	emitter.LightEmission = 1
+	emitter.Rate = 0
+	emitter.Lifetime = NumberRange.new(0.5, 1.2)
+	emitter.Speed = NumberRange.new(15, 35)
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 3),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	emitter.SpreadAngle = Vector2.new(180, 180)
+	emitter.Parent = burst
+	emitter:Emit(80)
+
+	task.delay(1.5, function()
+		if burst and burst.Parent then burst:Destroy() end
+	end)
+end
+
+------------------------------------------------
+-- RED ORB SWIRL + MERGE
+------------------------------------------------
+local function createRedOrb(startPos, character, blueOrb, blueOrbConn, platform)
+	local orb = Instance.new("Part")
+	orb.Shape = Enum.PartType.Ball
+	orb.Material = Enum.Material.Neon
+	orb.Color = Color3.fromRGB(255, 0, 0)
+	orb.Anchored = true
+	orb.CanCollide = false
+	orb.Size = Vector3.new(4, 4, 4)
+	orb.Position = startPos
+	orb.Parent = workspace
+
+	local redLight = Instance.new("PointLight")
+	redLight.Color = orb.Color
+	redLight.Brightness = 6
+	redLight.Range = 20
+	redLight.Parent = orb
+
+	local redEmitter = Instance.new("ParticleEmitter")
+	redEmitter.Color = ColorSequence.new(Color3.fromRGB(255, 60, 0))
+	redEmitter.LightEmission = 1
+	redEmitter.Rate = 30
+	redEmitter.Lifetime = NumberRange.new(0.2, 0.5)
+	redEmitter.Speed = NumberRange.new(1, 2)
+	redEmitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.2),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	redEmitter.Parent = orb
+
+	local duration = 6.5
+	local t = 0
+	local merged = false
+
+	local conn
+	conn = RunService.Heartbeat:Connect(function(dt)
+		if merged then return end
+
+		if not orb or not orb.Parent then
+			if conn then conn:Disconnect() end
 			return
 		end
 
-		local maxDistance = 150
-		local pullRadius = 100
-		local pullForce = 400000
+		if not blueOrb or not blueOrb.Parent then
+			if conn then conn:Disconnect() end
+			if orb and orb.Parent then orb:Destroy() end
+			return
+		end
 
-		local region = Region3.new(
-			purpleBall.Position - Vector3.new(maxDistance, maxDistance, maxDistance),
-			purpleBall.Position + Vector3.new(maxDistance, maxDistance, maxDistance)
+		t += dt
+		local alpha = math.clamp(t / duration, 0, 1)
+		local eased = alpha * alpha
+
+		local target = blueOrb.Position
+		local path = startPos:Lerp(target, eased)
+
+		local angle = t * 2.5
+		local radius = 14 * (1 - eased)
+
+		local swirl = Vector3.new(
+			math.cos(angle) * radius,
+			math.sin(angle * 0.5) * radius * 0.3,
+			math.sin(angle) * radius
 		)
 
-		local ignoreList = {character, purpleBall}
-		for _, plr in pairs(Players:GetPlayers()) do
-			if plr.Character then
-				table.insert(ignoreList, plr.Character)
+		orb.Position = path + swirl
+
+		if alpha >= 1 then
+			merged = true
+			if conn then conn:Disconnect() end
+
+			local mergePos = blueOrb.Position
+
+			if blueOrbConn then blueOrbConn:Disconnect() end
+
+			-- turn purple on merge
+			blueOrb.Color = Color3.fromRGB(140, 0, 255)
+			blueOrb.Size = Vector3.new(14, 14, 14)
+
+			-- update light to purple
+			local purpleLight = blueOrb:FindFirstChildOfClass("PointLight")
+			if purpleLight then
+				purpleLight.Color = Color3.fromRGB(140, 0, 255)
+				purpleLight.Brightness = 20
+				purpleLight.Range = 50
 			end
-		end
 
-		local parts = workspace:FindPartsInRegion3WithIgnoreList(region, ignoreList, math.huge)
+			-- update particles to purple
+			local purpleEmitter = blueOrb:FindFirstChildOfClass("ParticleEmitter")
+			if purpleEmitter then
+				purpleEmitter.Color = ColorSequence.new(Color3.fromRGB(180, 0, 255))
+				purpleEmitter.Rate = 80
+			end
 
-		for _, part in ipairs(parts) do
-			if part:IsA("BasePart") and not part.Anchored then
-				local distance = (part.Position - purpleBall.Position).Magnitude
-				local velocityControl = part:FindFirstChild("BlackholePull")
+			orb:Destroy()
 
-				if distance <= pullRadius then
-					if not velocityControl then
-						velocityControl = Instance.new("BodyVelocity")
-						velocityControl.Name = "BlackholePull"
-						velocityControl.MaxForce = Vector3.new(pullForce, pullForce, pullForce)
-						velocityControl.P = 4000000
-						velocityControl.Parent = part
-					end
-					local direction = (purpleBall.Position - part.Position).Unit
-					velocityControl.Velocity = direction * 300
-				else
-					if velocityControl then
-						velocityControl:Destroy()
-					end
+			-- keep growing for 3 seconds then explode
+			local growConn
+			local growStart = tick()
+			growConn = RunService.Heartbeat:Connect(function(dt)
+				if not blueOrb or not blueOrb.Parent then
+					if growConn then growConn:Disconnect() end
+					return
 				end
-			end
-		end
-	end
+				local elapsed = tick() - growStart
+				local s = 14 + elapsed * 0.7 -- grows 6 studs per second
+				blueOrb.Size = Vector3.new(s, s, s)
 
-	-- Purple movement + effects
-	task.delay(1, function()
-		local destination = purpleBall.Position + root.CFrame.LookVector * 500
-		local moveTween = TweenService:Create(purpleBall, TweenInfo.new(8, Enum.EasingStyle.Linear), {Position = destination})
-		moveTween:Play()
-
-		blockSpawnerConnection = RunService.RenderStepped:Connect(function()
-			if purpleBall and purpleBall.Parent then
-				local pos = purpleBall.Position
-				local rightVec = purpleBall.CFrame.RightVector
-				createSideBlock(pos - rightVec * 8)
-				createSideBlock(pos + rightVec * 8)
-			end
-		end)
-
-		pullConnection = RunService.Heartbeat:Connect(attractNearbyParts)
-	end)
-
-	-- Cleanup
-	task.delay(7, function()
-		if purpleBall and purpleBall.Parent then
-			purpleBall:Destroy()
-		end
-		if blockSpawnerConnection then
-			blockSpawnerConnection:Disconnect()
-		end
-		if pullConnection then
-			pullConnection:Disconnect()
-		end
-		if purpleSound and purpleSound.Parent then
-			purpleSound:Stop()
-			purpleSound:Destroy()
+				if elapsed >= 1.8 then
+					if growConn then growConn:Disconnect() end
+					if blueOrb and blueOrb.Parent then
+						blueOrb:Destroy()
+					end
+					purpleExplosion(mergePos)
+					task.delay(1, function()
+						if platform and platform.Parent then
+							platform:Destroy()
+						end
+					end)
+				end
+			end)
 		end
 	end)
 end
 
--- Bind to C key
+------------------------------------------------
+-- MAIN
+------------------------------------------------
+local function airTP()
+	local character = getCharacter()
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	-- play audios in order starting now
+	playAudioSequence(root)
+
+	local startPos = root.Position
+
+	root.CFrame = root.CFrame + Vector3.new(0, 30, 0)
+
+	local platform = createPlatform(root)
+	local blueOrb, blueOrbConn = createBlueOrb(root)
+
+	task.wait(0.5)
+	createRedOrb(startPos, character, blueOrb, blueOrbConn, platform)
+end
+
+------------------------------------------------
+-- INPUT
+------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
+
 	if input.KeyCode == Enum.KeyCode.C then
-		triggerPurpleBall()
+		airTP()
+	end
+end)
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+
+local player = Players.LocalPlayer
+
+local SOUND_ID = "122868247269553"
+
+local function playSound()
+	local character = player.Character or player.CharacterAdded:Wait()
+	local root = character:WaitForChild("HumanoidRootPart")
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. SOUND_ID
+	sound.Volume = 2
+	sound.Parent = root
+	sound:Play()
+
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.C then
+		playSound()
 	end
 end)
