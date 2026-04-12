@@ -1,3 +1,55 @@
+--lapse blue
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local currentTrack = nil
+
+local function playAnimation()
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	-- stop previous animation if playing
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop(0)
+		end)
+		currentTrack = nil
+	end
+
+	local ok, track = pcall(function()
+		return humanoid:PlayEmoteAndGetAnimTrackById(88152958783752)
+	end)
+
+	if not ok or not track then return end
+
+	track.Looped = false
+	track:AdjustSpeed(2)
+
+	currentTrack = track
+
+	task.delay(3, function()
+		if currentTrack then
+			pcall(function()
+				currentTrack:Stop(0)
+			end)
+			currentTrack = nil
+		end
+	end)
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.Z then
+		playAnimation()
+	end
+end)
+
 -- Services
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -53,8 +105,8 @@ local function createBall()
 
     local light = Instance.new("PointLight")
     light.Color = part.Color
-    light.Brightness = 2
-    light.Range = 8
+    light.Brightness = 9
+    light.Range = 20
     light.Parent = part
 
     local sound = Instance.new("Sound")
