@@ -465,40 +465,33 @@ end)
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
 
-local radius = 60
-local force = 120
+local radius = 9999
+local force = 9999
 local debounce = false
 
 local function shockwave()
 	local character = player.Character or player.CharacterAdded:Wait()
 	local root = character:WaitForChild("HumanoidRootPart")
 
-	local origin = root.Position
+	local center = root.Position
 
-	for _, obj in ipairs(workspace:GetDescendants()) do
-		if obj:IsA("BasePart") then
-			
-			-- ignore your own character completely (prevents self-fling)
-			if obj:IsDescendantOf(character) then
-				continue
-			end
+	local params = OverlapParams.new()
+	params.FilterType = Enum.RaycastFilterType.Blacklist
+	params.FilterDescendantsInstances = {character}
 
-			-- only unanchored parts
-			if obj.Anchored then
-				continue
-			end
+	local parts = Workspace:GetPartBoundsInRadius(center, radius, params)
 
-			local offset = obj.Position - origin
-			local dist = offset.Magnitude
+	for _, part in ipairs(parts) do
+		if part:IsA("BasePart") and not part.Anchored then
+			local direction = part.Position - center
 
-			if dist <= radius and dist > 0 then
-				local direction = offset.Unit
-				local strength = (1 - (dist / radius)) * force
-
-				obj:ApplyImpulse(direction * strength * obj.AssemblyMass)
+			if direction.Magnitude > 0 then
+				-- outward blast (explosion style)
+				part.AssemblyLinearVelocity = direction.Unit * force
 			end
 		end
 	end
