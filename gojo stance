@@ -1,0 +1,304 @@
+--The strongest stance
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+local currentTrack = nil
+
+local function playAnimation()
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	-- stop previous animation if playing
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop(0)
+		end)
+		currentTrack = nil
+	end
+
+	local ok, track = pcall(function()
+		return humanoid:PlayEmoteAndGetAnimTrackById(115627318790684)
+	end)
+
+	if not ok or not track then return end
+
+	track.Looped = false
+	track:AdjustSpeed(2)
+
+	currentTrack = track
+
+	task.delay(3, function()
+		if currentTrack then
+			pcall(function()
+				currentTrack:Stop(0)
+			end)
+			currentTrack = nil
+		end
+	end)
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.G then
+		playAnimation()
+	end
+end)
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid
+
+local enabled = false
+local effects = {}
+local activeSounds = 0
+
+local camConnection
+local moveConnection
+
+local oldAutoRotate = true
+
+------------------------------------------------
+-- SOUND
+------------------------------------------------
+local function playSound(parent, soundId)
+	activeSounds += 1
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. soundId
+	sound.Volume = 1
+	sound.Parent = parent
+	sound:Play()
+
+	sound.Ended:Connect(function()
+		activeSounds -= 1
+		sound:Destroy()
+	end)
+end
+
+------------------------------------------------
+-- EFFECTS
+------------------------------------------------
+local function createEffects(hand)
+	local light = Instance.new("PointLight")
+	light.Color = Color3.fromRGB(0, 170, 255)
+	light.Brightness = 5
+	light.Range = 12
+	light.Parent = hand
+
+	local fire = Instance.new("Fire")
+	fire.Color = Color3.fromRGB(0, 170, 255)
+	fire.SecondaryColor = Color3.fromRGB(0, 0, 255)
+	fire.Size = 4
+	fire.Heat = 10
+	fire.Parent = hand
+
+	table.insert(effects, light)
+	table.insert(effects, fire)
+end
+
+local function clearEffects()
+	for _, obj in ipairs(effects) do
+		if obj then obj:Destroy() end
+	end
+	effects = {}
+end
+
+------------------------------------------------
+-- CAMERA HELPERS
+------------------------------------------------
+local function setBehindCamera()
+	if not character or not humanoid then return end
+
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	local forward = root.CFrame.LookVector
+	forward = Vector3.new(forward.X, 0, forward.Z)
+
+	if forward.Magnitude == 0 then return end
+	forward = forward.Unit
+
+	local camPos = root.Position - forward * 8 + Vector3.new(0, 3, 0)
+	local lookAt = root.Position + Vector3.new(0, 2, 0)
+
+	camera.CFrame = CFrame.new(camPos, lookAt)
+end
+
+local function endCinematic()
+	if camConnection then
+		camConnection:Disconnect()
+		camConnection = nil
+	end
+
+	-- restore movement control
+	if humanoid then
+		humanoid.AutoRotate = oldAutoRotate
+	end
+
+	-- switch back to Roblox camera
+	camera.CameraType = Enum.CameraType.Custom
+	camera.CameraSubject = humanoid
+
+	-- place camera nicely behind player
+	setBehindCamera()
+
+	-- restore input control
+	player.CameraMode = Enum.CameraMode.Classic
+	UIS.MouseBehavior = Enum.MouseBehavior.Default
+end
+
+------------------------------------------------
+-- CINEMATIC CAMERA
+------------------------------------------------
+local function startCinematic()
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.CameraSubject = humanoid
+
+	player.CameraMode = Enum.CameraMode.Classic
+	UIS.MouseBehavior = Enum.MouseBehavior.Default
+
+	if camConnection then
+		camConnection:Disconnect()
+	end
+
+	camConnection = RunService.RenderStepped:Connect(function()
+		if not character or not humanoid then return end
+
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+
+		local forward = root.CFrame.LookVector
+		forward = Vector3.new(forward.X, 0, forward.Z)
+
+		if forward.Magnitude == 0 then return end
+		forward = forward.Unit
+
+		local right = Vector3.new(-forward.Z, 0, forward.X)
+
+		local distance = 12
+		local leftOffset = 4
+		local heightOffset = 1
+
+		local camPos =
+			root.Position
+			+ forward * distance
+			+ right * leftOffset
+			+ Vector3.new(0, heightOffset, 0)
+
+		local lookAt = root.Position + Vector3.new(0, 1.8, 0)
+
+		camera.CFrame = CFrame.new(camPos, lookAt)
+	end)
+end
+
+------------------------------------------------
+-- MOVEMENT CANCEL CHECK
+------------------------------------------------
+local function startMovementWatch()
+	if moveConnection then
+		moveConnection:Disconnect()
+	end
+
+	moveConnection = RunService.RenderStepped:Connect(function()
+		if not enabled or not humanoid then return end
+
+		if humanoid.MoveDirection.Magnitude > 0.05 then
+			enabled = false
+			deactivate()
+		end
+	end)
+end
+
+------------------------------------------------
+-- ACTIVATE / DEACTIVATE
+------------------------------------------------
+local function activate()
+	humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then return end
+
+	-- disable shift lock rotation
+	oldAutoRotate = humanoid.AutoRotate
+	humanoid.AutoRotate = false
+
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	local leftHand = character:FindFirstChild("LeftHand")
+	local rightHand = character:FindFirstChild("RightHand")
+
+	if leftHand then createEffects(leftHand) end
+	if rightHand then createEffects(rightHand) end
+
+	startCinematic()
+	startMovementWatch()
+
+	if hrp then
+		playSound(hrp, 138039161152589)
+		playSound(hrp, 107775089158264)
+	end
+end
+
+function deactivate()
+	if moveConnection then
+		moveConnection:Disconnect()
+		moveConnection = nil
+	end
+
+	clearEffects()
+	endCinematic()
+end
+
+------------------------------------------------
+-- INPUT
+------------------------------------------------
+UIS.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.G then
+		enabled = not enabled
+
+		if enabled then
+			activate()
+		else
+			deactivate()
+		end
+	end
+end)
+
+------------------------------------------------
+-- AUTO END (sounds finished)
+------------------------------------------------
+RunService.RenderStepped:Connect(function()
+	if enabled and activeSounds <= 0 then
+		enabled = false
+		deactivate()
+	end
+end)
+
+------------------------------------------------
+-- CHARACTER RESET
+------------------------------------------------
+local function setCharacter(char)
+	character = char
+	humanoid = character:WaitForChild("Humanoid")
+
+	enabled = false
+	clearEffects()
+	endCinematic()
+end
+
+player.CharacterAdded:Connect(setCharacter)
+
+if player.Character then
+	setCharacter(player.Character)
+end
