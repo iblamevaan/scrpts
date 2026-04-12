@@ -1,162 +1,257 @@
 local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local Debris = game:GetService("Debris")
-local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
 
--- Fling settings
+local currentTrack = nil
+local cooldown = false
+local COOLDOWN_TIME = 1
+
+------------------------------------------------
+-- CHARACTER TRACKING (FIXED)
+------------------------------------------------
+local character = player.Character or player.CharacterAdded:Wait()
+
+player.CharacterAdded:Connect(function(c)
+	character = c
+end)
+
+------------------------------------------------
+-- ANIMATION
+------------------------------------------------
+local function playAnimation()
+	if not character then return end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop(0)
+		end)
+		currentTrack = nil
+	end
+
+	local ok, track = pcall(function()
+		return humanoid:PlayEmoteAndGetAnimTrackById(118139871934372)
+	end)
+
+	if not ok or not track then return end
+
+	track.Looped = false
+	track:AdjustSpeed(2)
+
+	currentTrack = track
+
+	task.delay(3, function()
+		if currentTrack then
+			pcall(function()
+				currentTrack:Stop(0)
+			end)
+			currentTrack = nil
+		end
+	end)
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.X then
+		playAnimation()
+	end
+end)
+
+------------------------------------------------
+-- SETTINGS
+------------------------------------------------
 local FLING_RADIUS = 15
 local FLING_VELOCITY = 250
 local FLING_FORCE = 400000
 
--- Cooldown
-local cooldown = false
-local COOLDOWN_TIME = 1 -- seconds
+------------------------------------------------
+-- SOUND (STABLE FIX)
+------------------------------------------------
+local function playSFX(soundId, character)
+	local root = character and character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
 
--- Helper to play sound safely
-local function playSFX(soundId, parent)
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://" .. soundId
-    sound.Volume = 1.5 -- original volume
-    sound.PlayOnRemove = false
-    sound.Parent = parent
-    sound:Play()
-    Debris:AddItem(sound, 5)
+	local old = root:FindFirstChild("ActiveSFX")
+	if old then
+		old:Stop()
+		old:Destroy()
+	end
+
+	local sound = Instance.new("Sound")
+	sound.Name = "ActiveSFX"
+	sound.SoundId = "rbxassetid://" .. soundId
+	sound.Volume = 1.5
+	sound.RollOffMaxDistance = 60
+	sound.Parent = root
+
+	-- non-blocking load fix
+	task.spawn(function()
+		if not sound.IsLoaded then
+			sound.Loaded:Wait()
+		end
+	end)
+
+	sound:Play()
+
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
 end
 
--- Get nearby unanchored parts
-local function getNearbyUnanchoredParts(centerPos, range)
-    local region = Region3.new(centerPos - Vector3.new(range, range, range), centerPos + Vector3.new(range, range, range))
-    local parts = workspace:FindPartsInRegion3WithIgnoreList(region, {player.Character}, math.huge)
-    local valid = {}
+------------------------------------------------
+-- GET PARTS
+------------------------------------------------
+local function getNearbyUnanchoredParts(centerPos, range, character)
+	local region = Region3.new(
+		centerPos - Vector3.new(range, range, range),
+		centerPos + Vector3.new(range, range, range)
+	)
 
-    for _, part in ipairs(parts) do
-        if part:IsA("BasePart") and not part.Anchored and not part:IsDescendantOf(player.Character) then
-            table.insert(valid, part)
-        end
-    end
-    return valid
+	local parts = workspace:FindPartsInRegion3WithIgnoreList(region, {character}, math.huge)
+	local valid = {}
+
+	for _, part in ipairs(parts) do
+		if part:IsA("BasePart") and not part.Anchored and not part:IsDescendantOf(character) then
+			table.insert(valid, part)
+		end
+	end
+
+	return valid
 end
 
--- Create the ball and launch it
-local function createHeldBall(character)
-    -- Support R6 and R15
-    local rightArm = character:FindFirstChild("RightHand") or character:FindFirstChild("Right Arm")
-    local rootPart = character:FindFirstChild("HumanoidRootPart")
-    if not rightArm or not rootPart then
-        warn("Right Arm/Hand or HumanoidRootPart not found!")
-        return
-    end
+------------------------------------------------
+-- CREATE BALL
+------------------------------------------------
+local function createHeldBall(char)
+	if not char then return end
 
-    local ball = Instance.new("Part")
-    ball.Name = "HeldBall"
-    ball.Shape = Enum.PartType.Ball
-    ball.Size = Vector3.new(0.5, 0.5, 0.5) -- original size
-    ball.Material = Enum.Material.Neon
-    ball.BrickColor = BrickColor.new("Really red")
-    ball.Anchored = false
-    ball.CanCollide = true
+	local rightArm = char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
+	local rootPart = char:FindFirstChild("HumanoidRootPart")
+	if not rightArm or not rootPart then return end
 
-    -- Glow
-    local light = Instance.new("PointLight")
-    light.Brightness = 10
-    light.Range = 15
-    light.Color = Color3.fromRGB(255, 0, 0)
-    light.Parent = ball
+	local ball = Instance.new("Part")
+	ball.Name = "HeldBall"
+	ball.Shape = Enum.PartType.Ball
+	ball.Size = Vector3.new(0.5, 0.5, 0.5)
+	ball.Material = Enum.Material.Neon
+	ball.Color = Color3.fromRGB(255, 0, 0)
+	ball.Anchored = false
+	ball.CanCollide = true
+	ball.Parent = char
 
-    -- Weld to hand (directly on top of hand)
-    local weld = Instance.new("Weld")
-    weld.Part0 = rightArm
-    weld.Part1 = ball
-    weld.C0 = CFrame.new(0, 0, 0) -- directly at hand
-    weld.Parent = ball
-    ball.Parent = character
+	------------------------------------------------
+	-- PARTICLES (your existing style kept)
+	------------------------------------------------
+	local particles = Instance.new("ParticleEmitter")
+	particles.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 0, 0))
+	})
 
-    -- Play audio
-    playSFX("9114314786", ball)
+	particles.LightEmission = 0.8
+	particles.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.7),
+		NumberSequenceKeypoint.new(0.5, 0.35),
+		NumberSequenceKeypoint.new(1, 0)
+	})
 
-    -- Delay then launch
-    task.delay(1, function()
-        if not character or not rootPart or not ball.Parent then return end
+	particles.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.1),
+		NumberSequenceKeypoint.new(1, 1)
+	})
 
-        weld:Destroy()
-        ball.Anchored = true
+	particles.Lifetime = NumberRange.new(0.25, 0.5)
+	particles.Rate = 55
+	particles.Speed = NumberRange.new(2, 6)
+	particles.Drag = 2
+	particles.SpreadAngle = Vector2.new(180, 180)
+	particles.Rotation = NumberRange.new(0, 360)
+	particles.RotSpeed = NumberRange.new(-90, 90)
+	particles.Parent = ball
 
-        local startPos = ball.Position
-        local forwardDirection = rootPart.CFrame.LookVector
-        local endPos = startPos + forwardDirection * 600
+	local light = Instance.new("PointLight")
+	light.Brightness = 10
+	light.Range = 15
+	light.Color = Color3.fromRGB(255, 0, 0)
+	light.Parent = ball
 
-        local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Linear)
-        local goal = { Position = endPos }
-        local tween = TweenService:Create(ball, tweenInfo, goal)
-        tween:Play()
+	local weld = Instance.new("Weld")
+	weld.Part0 = rightArm
+	weld.Part1 = ball
+	weld.C0 = CFrame.new(0, 0, 0)
+	weld.Parent = ball
 
-        local flingConn
-        flingConn = RunService.Heartbeat:Connect(function()
-            if not ball or not ball.Parent then
-                if flingConn then flingConn:Disconnect() end
-                return
-            end
+	playSFX("113806286169554", char)
 
-            local pos = ball.Position
-            local parts = getNearbyUnanchoredParts(pos, FLING_RADIUS)
+	task.delay(1, function()
+		if not char or not rootPart or not ball.Parent then return end
 
-            for _, part in ipairs(parts) do
-                local offset = part.Position - pos
-                if offset.Magnitude == 0 then continue end
-                local direction = offset.Unit
+		weld:Destroy()
+		ball.Anchored = true
 
-                local bv = Instance.new("BodyVelocity")
-                bv.Name = "FlingForce"
-                bv.MaxForce = Vector3.new(FLING_FORCE, FLING_FORCE, FLING_FORCE)
-                bv.P = 400000
-                bv.Velocity = direction * FLING_VELOCITY
-                bv.Parent = part
+		local startPos = ball.Position
+		local forwardDirection = rootPart.CFrame.LookVector
+		local endPos = startPos + forwardDirection * 600
 
-                Debris:AddItem(bv, 0.1)
-            end
-        end)
+		local tween = TweenService:Create(
+			ball,
+			TweenInfo.new(1, Enum.EasingStyle.Linear),
+			{Position = endPos}
+		)
 
-        tween.Completed:Wait()
-        if flingConn then flingConn:Disconnect() end
-        ball:Destroy()
-    end)
+		tween:Play()
+
+		local flingConn
+		flingConn = RunService.Heartbeat:Connect(function()
+			if not ball or not ball.Parent then
+				if flingConn then flingConn:Disconnect() end
+				return
+			end
+
+			local pos = ball.Position
+			local parts = getNearbyUnanchoredParts(pos, FLING_RADIUS, char)
+
+			for _, part in ipairs(parts) do
+				local offset = part.Position - pos
+				if offset.Magnitude == 0 then continue end
+
+				local direction = offset.Unit
+
+				local bv = Instance.new("BodyVelocity")
+				bv.MaxForce = Vector3.new(FLING_FORCE, FLING_FORCE, FLING_FORCE)
+				bv.P = 400000
+				bv.Velocity = direction * FLING_VELOCITY
+				bv.Parent = part
+
+				Debris:AddItem(bv, 0.1)
+			end
+		end)
+
+		tween.Completed:Wait()
+		if flingConn then flingConn:Disconnect() end
+		ball:Destroy()
+	end)
 end
 
--- Setup input
-local function setupCharacter(character)
-    -- Wait for hand
-    local rightArm = character:WaitForChild("RightHand", 3) or character:WaitForChild("Right Arm", 3)
-    if rightArm then
-        UserInputService.InputBegan:Connect(function(input, processed)
-            if processed then return end
-            if input.KeyCode == Enum.KeyCode.X and not cooldown then
-                cooldown = true
-                createHeldBall(character)
+------------------------------------------------
+-- INPUT (FIXED — NO BREAKING)
+------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
 
-                local humanoid = character:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    humanoid.Died:Connect(function()
-                        local ball = character:FindFirstChild("HeldBall")
-                        if ball then
-                            ball:Destroy()
-                        end
-                    end)
-                end
+	if input.KeyCode == Enum.KeyCode.X and not cooldown then
+		cooldown = true
+		createHeldBall(character)
 
-                -- Reset cooldown
-                task.delay(COOLDOWN_TIME, function()
-                    cooldown = false
-                end)
-            end
-        end)
-    end
-end
-
--- Run on character spawn
-player.CharacterAdded:Connect(setupCharacter)
-if player.Character then
-    setupCharacter(player.Character)
-end
+		task.delay(COOLDOWN_TIME, function()
+			cooldown = false
+		end)
+	end
+end)
