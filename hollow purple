@@ -389,7 +389,7 @@ local function createRedOrb(startPos, character, blueOrb, blueOrbConn, platform)
 						blueOrb:Destroy()
 					end
 					purpleExplosion(mergePos)
-					task.delay(1, function()
+					task.delay(2, function()
 						if platform and platform.Parent then
 							platform:Destroy()
 						end
@@ -460,5 +460,60 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 
 	if input.KeyCode == Enum.KeyCode.C then
 		playSound()
+	end
+end)
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local player = Players.LocalPlayer
+
+local radius = 60
+local force = 120
+local debounce = false
+
+local function shockwave()
+	local character = player.Character or player.CharacterAdded:Wait()
+	local root = character:WaitForChild("HumanoidRootPart")
+
+	local origin = root.Position
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			
+			-- ignore your own character completely (prevents self-fling)
+			if obj:IsDescendantOf(character) then
+				continue
+			end
+
+			-- only unanchored parts
+			if obj.Anchored then
+				continue
+			end
+
+			local offset = obj.Position - origin
+			local dist = offset.Magnitude
+
+			if dist <= radius and dist > 0 then
+				local direction = offset.Unit
+				local strength = (1 - (dist / radius)) * force
+
+				obj:ApplyImpulse(direction * strength * obj.AssemblyMass)
+			end
+		end
+	end
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.C and not debounce then
+		debounce = true
+
+		task.spawn(function()
+			task.wait(9)
+			shockwave()
+			debounce = false
+		end)
 	end
 end)
