@@ -1,170 +1,425 @@
---// Infinite Void | Keybind: V
+--Infinite void
 
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
-local Lighting = game:GetService("Lighting")
-local Debris = game:GetService("Debris")
 local UserInputService = game:GetService("UserInputService")
 
 local player = Players.LocalPlayer
-local cooldown = false
-local COOLDOWN_TIME = 10
+local currentTrack = nil
 
-local function InfiniteVoid()
-	if cooldown then return end
-	cooldown = true
+local function playAnimation()
+	local character = player.Character
+	if not character then return end
 
-	local character = player.Character or player.CharacterAdded:Wait()
-	local humanoid = character:WaitForChild("Humanoid")
-	local hrp = character:WaitForChild("HumanoidRootPart")
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
 
-	-- =====================
-	-- START AUDIO
-	-- =====================
-	local startSound = Instance.new("Sound")
-	startSound.SoundId = "rbxassetid://96616607755426"
-	startSound.Volume = 3
-	startSound.PlaybackSpeed = 1
-	startSound.Parent = workspace
-	startSound:Play()
-
-	-- =====================
-	-- FORCE / FREEZE EFFECT
-	-- =====================
-	local FREEZE_START_DISTANCE = 1000
-	local WALL_DISTANCE = 1
-	local PUSH_FORCE = 100000
-	local PUSH_OUT_SPEED = 150
-	local active = true
-
-	local function getNearbyUnanchoredParts(centerPos, range)
-		local region = Region3.new(
-			centerPos - Vector3.new(range, range, range),
-			centerPos + Vector3.new(range, range, range)
-		)
-		local parts = workspace:FindPartsInRegion3WithIgnoreList(region, {character}, math.huge)
-		local valid = {}
-
-		for _, part in ipairs(parts) do
-			if part:IsA("BasePart") and not part.Anchored and not part:IsDescendantOf(character) then
-				table.insert(valid, part)
-			end
-		end
-		return valid
+	-- stop previous animation if playing
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop(0)
+		end)
+		currentTrack = nil
 	end
 
-	local heartbeatConn
-	heartbeatConn = RunService.Heartbeat:Connect(function()
-		if not active then return end
-		if not hrp then return end
-
-		for _, part in ipairs(getNearbyUnanchoredParts(hrp.Position, FREEZE_START_DISTANCE)) do
-			local offset = part.Position - hrp.Position
-			local distance = offset.Magnitude
-
-			local bv = part:FindFirstChild("RepelForce")
-			if not bv then
-				bv = Instance.new("BodyVelocity")
-				bv.Name = "RepelForce"
-				bv.MaxForce = Vector3.new(PUSH_FORCE, PUSH_FORCE, PUSH_FORCE)
-				bv.P = 4000000
-				bv.Parent = part
-			end
-
-			if distance <= WALL_DISTANCE then
-				bv.Velocity = offset.Unit * PUSH_OUT_SPEED
-			else
-				bv.Velocity = Vector3.zero
-			end
-		end
+	local ok, track = pcall(function()
+		return humanoid:PlayEmoteAndGetAnimTrackById(90085716100071)
 	end)
 
-	-- =====================
-	-- SKY + VOID EFFECT
-	-- =====================
-	local oldSky = Lighting:FindFirstChildOfClass("Sky")
-	if oldSky then oldSky = oldSky:Clone() end
-	for _, v in ipairs(Lighting:GetChildren()) do
-		if v:IsA("Sky") then v:Destroy() end
-	end
+	if not ok or not track then return end
 
-	local sky = Instance.new("Sky", Lighting)
-	for _, f in ipairs({"Bk","Dn","Ft","Lf","Rt","Up"}) do
-		sky["Skybox"..f] = "rbxassetid://155441936"
-	end
+	track.Looped = false
+	track:AdjustSpeed(2)
 
-	local cc = Instance.new("ColorCorrectionEffect", Lighting)
-	cc.TintColor = Color3.new(0,0,0)
-	cc.Brightness = -1
-	TweenService:Create(cc, TweenInfo.new(0.8), {
-		TintColor = Color3.new(1,1,1),
-		Brightness = 0
-	}):Play()
+	currentTrack = track
 
-	-- =====================
-	-- XRAY WORLD
-	-- =====================
-	local hidden = {}
-	for _, p in ipairs(workspace:GetDescendants()) do
-		if p:IsA("BasePart") and p.Anchored then
-			table.insert(hidden, {
-				Part = p,
-				OriginalTransparency = p.Transparency
-			})
-			p.Transparency = 1
+	task.delay(3, function()
+		if currentTrack then
+			pcall(function()
+				currentTrack:Stop(0)
+			end)
+			currentTrack = nil
 		end
-	end
-
-	-- =====================
-	-- END AFTER DURATION
-	-- =====================
-	task.delay(9, function()
-		active = false
-		if heartbeatConn then heartbeatConn:Disconnect() end
-
-		for _, p in ipairs(workspace:GetDescendants()) do
-			if p:IsA("BodyVelocity") and p.Name == "RepelForce" then
-				p:Destroy()
-			end
-		end
-
-		-- restore original transparency
-		for _, data in ipairs(hidden) do
-			local p = data.Part
-			if p:IsA("BasePart") then
-				p.Transparency = data.OriginalTransparency
-			end
-		end
-
-		sky:Destroy()
-		cc:Destroy()
-		if oldSky then oldSky.Parent = Lighting end
-	end)
-
-	-- =====================
-	-- FINAL AUDIO
-	-- =====================
-	task.delay(8.5, function()
-		local endSound = Instance.new("Sound")
-		endSound.SoundId = "rbxassetid://7486846874"
-		endSound.Volume = 3
-		endSound.PlaybackSpeed = 1
-		endSound.Parent = workspace
-		endSound:Play()
-	end)
-
-	task.delay(COOLDOWN_TIME, function()
-		cooldown = false
 	end)
 end
 
--- =====================
--- KEYBIND (V)
--- =====================
-UserInputService.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if input.KeyCode == Enum.KeyCode.V then
-		InfiniteVoid()
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.F then
+		playAnimation()
 	end
+end)
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+
+local player = Players.LocalPlayer
+local camera = workspace.CurrentCamera
+
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid
+
+local enabled = false
+local activeSounds = 0
+
+local camConnection
+local moveConnection
+
+local oldAutoRotate = true
+
+------------------------------------------------
+-- SOUND
+------------------------------------------------
+local function playSound(parent, soundId)
+	activeSounds += 1
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://" .. soundId
+	sound.Volume = 1
+	sound.Parent = parent
+	sound:Play()
+
+	sound.Ended:Connect(function()
+		activeSounds -= 1
+		sound:Destroy()
+	end)
+end
+
+------------------------------------------------
+-- CAMERA HELPERS
+------------------------------------------------
+local function setBehindCamera()
+	if not character or not humanoid then return end
+
+	local root = character:FindFirstChild("HumanoidRootPart")
+	if not root then return end
+
+	local forward = root.CFrame.LookVector
+	forward = Vector3.new(forward.X, 0, forward.Z)
+
+	if forward.Magnitude == 0 then return end
+	forward = forward.Unit
+
+	local camPos = root.Position - forward * 8 + Vector3.new(0, 3, 0)
+	local lookAt = root.Position + Vector3.new(0, 2, 0)
+
+	camera.CFrame = CFrame.new(camPos, lookAt)
+end
+
+local function endCinematic()
+	if camConnection then
+		camConnection:Disconnect()
+		camConnection = nil
+	end
+
+	-- restore movement control
+	if humanoid then
+		humanoid.AutoRotate = oldAutoRotate
+	end
+
+	-- switch back to Roblox camera
+	camera.CameraType = Enum.CameraType.Custom
+	camera.CameraSubject = humanoid
+
+	-- place camera nicely behind player
+	setBehindCamera()
+
+	-- restore input control
+	player.CameraMode = Enum.CameraMode.Classic
+	UIS.MouseBehavior = Enum.MouseBehavior.Default
+end
+
+------------------------------------------------
+-- CINEMATIC CAMERA
+------------------------------------------------
+local function startCinematic()
+	camera.CameraType = Enum.CameraType.Scriptable
+	camera.CameraSubject = humanoid
+
+	player.CameraMode = Enum.CameraMode.Classic
+	UIS.MouseBehavior = Enum.MouseBehavior.Default
+
+	if camConnection then
+		camConnection:Disconnect()
+	end
+
+	camConnection = RunService.RenderStepped:Connect(function()
+		if not character or not humanoid then return end
+
+		local root = character:FindFirstChild("HumanoidRootPart")
+		if not root then return end
+
+		local forward = root.CFrame.LookVector
+		forward = Vector3.new(forward.X, 0, forward.Z)
+
+		if forward.Magnitude == 0 then return end
+		forward = forward.Unit
+
+		local right = Vector3.new(-forward.Z, 0, forward.X)
+
+		local distance = 7
+		local leftOffset = 0
+		local heightOffset = 1
+
+		local camPos =
+			root.Position
+			+ forward * distance
+			+ right * leftOffset
+			+ Vector3.new(0, heightOffset, 0)
+
+		local lookAt = root.Position + Vector3.new(0, 1.8, 0)
+
+		camera.CFrame = CFrame.new(camPos, lookAt)
+	end)
+end
+
+------------------------------------------------
+-- MOVEMENT CANCEL CHECK
+------------------------------------------------
+local function startMovementWatch()
+	if moveConnection then
+		moveConnection:Disconnect()
+	end
+
+	moveConnection = RunService.RenderStepped:Connect(function()
+		if not enabled or not humanoid then return end
+
+		if humanoid.MoveDirection.Magnitude > 0.05 then
+			enabled = false
+			deactivate()
+		end
+	end)
+end
+
+------------------------------------------------
+-- ACTIVATE / DEACTIVATE
+------------------------------------------------
+local function activate()
+	humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then return end
+
+	oldAutoRotate = humanoid.AutoRotate
+	humanoid.AutoRotate = false
+
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+
+	startCinematic()
+	startMovementWatch()
+
+	if hrp then
+		playSound(hrp, 138283818946733)
+		playSound(hrp, 96616607755426)
+	end
+end
+
+function deactivate()
+	if moveConnection then
+		moveConnection:Disconnect()
+		moveConnection = nil
+	end
+
+	endCinematic()
+end
+
+------------------------------------------------
+-- INPUT
+------------------------------------------------
+UIS.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.F then
+		enabled = not enabled
+
+		if enabled then
+			activate()
+		else
+			deactivate()
+		end
+	end
+end)
+
+------------------------------------------------
+-- AUTO END (sounds finished)
+------------------------------------------------
+RunService.RenderStepped:Connect(function()
+	if enabled and activeSounds <= 0 then
+		enabled = false
+		deactivate()
+	end
+end)
+
+------------------------------------------------
+-- CHARACTER RESET
+------------------------------------------------
+local function setCharacter(char)
+	character = char
+	humanoid = character:WaitForChild("Humanoid")
+
+	enabled = false
+	endCinematic()
+end
+
+player.CharacterAdded:Connect(setCharacter)
+
+if player.Character then
+	setCharacter(player.Character)
+end
+
+-- LocalScript (StarterPlayerScripts)
+
+local UserInputService = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local Lighting = game:GetService("Lighting")
+
+local player = Players.LocalPlayer
+
+local SOUND_ID = "rbxassetid://129909595922206"
+
+-- save original sky
+local originalSky = Lighting:FindFirstChildOfClass("Sky")
+if originalSky then
+	originalSky = originalSky:Clone()
+end
+
+---------------------------------------------------
+-- SOUND
+---------------------------------------------------
+local function playSound()
+	local sound = Instance.new("Sound")
+	sound.SoundId = SOUND_ID
+	sound.Volume = 7 -- updated volume
+	sound.RollOffMaxDistance = 10000
+	sound.Parent = workspace
+
+	sound:Play()
+
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+end
+
+---------------------------------------------------
+-- SKY
+---------------------------------------------------
+local function applySky()
+	local sky = Instance.new("Sky")
+	local id = "rbxassetid://957379365"
+
+	sky.SkyboxBk = id
+	sky.SkyboxDn = id
+	sky.SkyboxFt = id
+	sky.SkyboxLf = id
+	sky.SkyboxRt = id
+	sky.SkyboxUp = id
+
+	sky.Parent = Lighting
+	return sky
+end
+
+local function restoreSky(newSky)
+	if newSky then newSky:Destroy() end
+
+	local existing = Lighting:FindFirstChildOfClass("Sky")
+	if existing then existing:Destroy() end
+
+	if originalSky then
+		local clone = originalSky:Clone()
+		clone.Parent = Lighting
+	end
+end
+
+---------------------------------------------------
+-- REMOVE SUN / MOON EFFECT
+---------------------------------------------------
+local function hideSunMoon()
+	Lighting.ClockTime = 0 -- forces night-like state
+	Lighting.Brightness = 0
+
+	local atm = Lighting:FindFirstChildOfClass("Atmosphere")
+	if atm then
+		atm:Destroy()
+	end
+end
+
+local function restoreLighting()
+	Lighting.ClockTime = 14 -- default daytime feel (can be changed)
+	Lighting.Brightness = 2
+end
+
+---------------------------------------------------
+-- WORLD VISIBILITY
+---------------------------------------------------
+local function setWorldTransparency(value)
+	local stored = {}
+
+	for _, obj in ipairs(workspace:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			local model = obj:FindFirstAncestorOfClass("Model")
+
+			if not (model and Players:GetPlayerFromCharacter(model)) then
+				stored[obj] = obj.Transparency
+				obj.Transparency = value
+			end
+		end
+	end
+
+	return stored
+end
+
+local function restoreTransparency(stored)
+	for part, oldValue in pairs(stored) do
+		if part and part.Parent then
+			part.Transparency = oldValue
+		end
+	end
+end
+
+---------------------------------------------------
+-- GHOST MODE
+---------------------------------------------------
+local function ghostMode(duration)
+	local character = player.Character or player.CharacterAdded:Wait()
+
+	local stored = {}
+
+	for _, obj in ipairs(character:GetDescendants()) do
+		if obj:IsA("BasePart") then
+			stored[obj] = obj.CanCollide
+			obj.CanCollide = false
+		end
+	end
+
+	task.delay(duration, function()
+		for part, state in pairs(stored) do
+			if part and part.Parent then
+				part.CanCollide = state
+			end
+		end
+	end)
+end
+
+---------------------------------------------------
+-- ACTIVATION
+---------------------------------------------------
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode ~= Enum.KeyCode.F then return end
+
+	task.delay(1.2, function()
+		playSound()
+
+		local newSky = applySky()
+		hideSunMoon()
+
+		local worldStored = setWorldTransparency(1)
+
+		ghostMode(15)
+
+		task.delay(15, function()
+			restoreSky(newSky)
+			restoreTransparency(worldStored)
+			restoreLighting()
+		end)
+	end)
 end)
