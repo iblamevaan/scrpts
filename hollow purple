@@ -1,110 +1,55 @@
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-
-local player = Players.LocalPlayer
-local currentTrack = nil
-
-local function playAnimation()
-	local character = player.Character
-	if not character then return end
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then return end
-
-	-- stop previous animation if playing
-	if currentTrack then
-		pcall(function()
-			currentTrack:Stop(0)
-		end)
-		currentTrack = nil
-	end
-
-	local ok, track = pcall(function()
-		return humanoid:PlayEmoteAndGetAnimTrackById(85641700867993)
-	end)
-
-	if not ok or not track then return end
-
-	track.Looped = false
-	track:AdjustSpeed(2)
-
-	currentTrack = track
-
-	task.delay(3, function()
-		if currentTrack then
-			pcall(function()
-				currentTrack:Stop(0)
-			end)
-			currentTrack = nil
-		end
-	end)
-end
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-
-	if input.KeyCode == Enum.KeyCode.C then
-		playAnimation()
-	end
-end)
-
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-
-local player = Players.LocalPlayer
-local currentTrack = nil
-
-local function playAnimation()
-	local character = player.Character
-	if not character then return end
-
-	local humanoid = character:FindFirstChildOfClass("Humanoid")
-	if not humanoid then return end
-
-	-- stop previous animation if playing
-	if currentTrack then
-		pcall(function()
-			currentTrack:Stop(0)
-		end)
-		currentTrack = nil
-	end
-
-	local ok, track = pcall(function()
-		return humanoid:PlayEmoteAndGetAnimTrackById(85641700867993)
-	end)
-
-	if not ok or not track then return end
-
-	track.Looped = false
-	track:AdjustSpeed(2)
-
-	currentTrack = track
-
-	task.delay(3, function()
-		if currentTrack then
-			pcall(function()
-				currentTrack:Stop(0)
-			end)
-			currentTrack = nil
-		end
-	end)
-end
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-	if gameProcessed then return end
-
-	if input.KeyCode == Enum.KeyCode.C then
-		playAnimation()
-	end
-end)
-
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
 local Lighting = game:GetService("Lighting")
 local TweenService = game:GetService("TweenService")
+local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
+local currentTrack = nil
+
+local function playAnimation()
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop(0)
+		end)
+		currentTrack = nil
+	end
+
+	local ok, track = pcall(function()
+		return humanoid:PlayEmoteAndGetAnimTrackById(85641700867993)
+	end)
+
+	if not ok or not track then return end
+
+	track.Looped = false
+	track:AdjustSpeed(2)
+
+	currentTrack = track
+
+	task.delay(3, function()
+		if currentTrack then
+			pcall(function()
+				currentTrack:Stop(0)
+			end)
+			currentTrack = nil
+		end
+	end)
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.C then
+		playAnimation()
+	end
+end)
 
 local function getCharacter()
 	return player.Character or player.CharacterAdded:Wait()
@@ -139,7 +84,6 @@ local function playAudioSequence(root)
 		for _, id in ipairs(ids) do
 			if not root or not root.Parent then break end
 			local sound = playSound(id, root)
-			-- wait for this one to finish before playing next
 			sound.Ended:Wait()
 		end
 	end)
@@ -251,23 +195,6 @@ local function purpleExplosion(position)
 		Transparency = 1
 	}):Play()
 
-	local emitter = Instance.new("ParticleEmitter")
-	emitter.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 100, 255)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(100, 0, 200))
-	})
-	emitter.LightEmission = 1
-	emitter.Rate = 0
-	emitter.Lifetime = NumberRange.new(0.5, 1.2)
-	emitter.Speed = NumberRange.new(15, 35)
-	emitter.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 3),
-		NumberSequenceKeypoint.new(1, 0)
-	})
-	emitter.SpreadAngle = Vector2.new(180, 180)
-	emitter.Parent = burst
-	emitter:Emit(80)
-
 	task.delay(1.5, function()
 		if burst and burst.Parent then burst:Destroy() end
 	end)
@@ -350,11 +277,9 @@ local function createRedOrb(startPos, character, blueOrb, blueOrbConn, platform)
 
 			if blueOrbConn then blueOrbConn:Disconnect() end
 
-			-- turn purple on merge
 			blueOrb.Color = Color3.fromRGB(140, 0, 255)
 			blueOrb.Size = Vector3.new(14, 14, 14)
 
-			-- update light to purple
 			local purpleLight = blueOrb:FindFirstChildOfClass("PointLight")
 			if purpleLight then
 				purpleLight.Color = Color3.fromRGB(140, 0, 255)
@@ -362,7 +287,6 @@ local function createRedOrb(startPos, character, blueOrb, blueOrbConn, platform)
 				purpleLight.Range = 50
 			end
 
-			-- update particles to purple
 			local purpleEmitter = blueOrb:FindFirstChildOfClass("ParticleEmitter")
 			if purpleEmitter then
 				purpleEmitter.Color = ColorSequence.new(Color3.fromRGB(180, 0, 255))
@@ -371,25 +295,24 @@ local function createRedOrb(startPos, character, blueOrb, blueOrbConn, platform)
 
 			orb:Destroy()
 
-			-- keep growing for 3 seconds then explode
 			local growConn
 			local growStart = tick()
-			growConn = RunService.Heartbeat:Connect(function(dt)
+			growConn = RunService.Heartbeat:Connect(function()
 				if not blueOrb or not blueOrb.Parent then
 					if growConn then growConn:Disconnect() end
 					return
 				end
+
 				local elapsed = tick() - growStart
-				local s = 14 + elapsed * 0.7 -- grows 6 studs per second
+				local s = 14 + elapsed * 0.7
 				blueOrb.Size = Vector3.new(s, s, s)
 
 				if elapsed >= 1.8 then
-					if growConn then growConn:Disconnect() end
-					if blueOrb and blueOrb.Parent then
-						blueOrb:Destroy()
-					end
+					growConn:Disconnect()
+					blueOrb:Destroy()
 					purpleExplosion(mergePos)
-					task.delay(2, function()
+
+					task.delay(1, function()
 						if platform and platform.Parent then
 							platform:Destroy()
 						end
@@ -408,14 +331,20 @@ local function airTP()
 	local root = character:FindFirstChild("HumanoidRootPart")
 	if not root then return end
 
-	-- play audios in order starting now
 	playAudioSequence(root)
 
 	local startPos = root.Position
 
-	root.CFrame = root.CFrame + Vector3.new(0, 30, 0)
-
+	-- CHANGED: platform now lifts you instead of instant teleport
 	local platform = createPlatform(root)
+
+	local liftTween = TweenService:Create(
+		platform,
+		TweenInfo.new(2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+		{CFrame = platform.CFrame + Vector3.new(0, 30, 0)}
+	)
+	liftTween:Play()
+
 	local blueOrb, blueOrbConn = createBlueOrb(root)
 
 	task.wait(0.5)
@@ -432,11 +361,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 		airTP()
 	end
 end)
-
-local UserInputService = game:GetService("UserInputService")
-local Players = game:GetService("Players")
-
-local player = Players.LocalPlayer
 
 local SOUND_ID = "122868247269553"
 
@@ -463,12 +387,6 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
-local Players = game:GetService("Players")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-
-local player = Players.LocalPlayer
-
 local radius = 9999
 local force = 9999
 local debounce = false
@@ -488,9 +406,7 @@ local function shockwave()
 	for _, part in ipairs(parts) do
 		if part:IsA("BasePart") and not part.Anchored then
 			local direction = part.Position - center
-
 			if direction.Magnitude > 0 then
-				-- outward blast (explosion style)
 				part.AssemblyLinearVelocity = direction.Unit * force
 			end
 		end
