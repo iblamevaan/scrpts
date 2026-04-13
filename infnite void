@@ -124,7 +124,7 @@ local function activate()
 	if not humanoid then return end
 
 	oldAutoRotate = humanoid.AutoRotate
-	humanoid.AutoRotate = false
+	humanoid.AutoRotate = true
 
 	local hrp = character:FindFirstChild("HumanoidRootPart")
 
