@@ -1,3 +1,4 @@
+--hollow nuke
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local RunService = game:GetService("RunService")
@@ -123,6 +124,7 @@ local function createBlueOrb(root)
 	light.Parent = orb
 
 	local emitter = Instance.new("ParticleEmitter")
+	emitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
 	emitter.Color = ColorSequence.new(Color3.fromRGB(0, 170, 255))
 	emitter.LightEmission = 1
 	emitter.Rate = 40
@@ -176,7 +178,7 @@ local function purpleExplosion(position)
 
 	local burst = Instance.new("Part")
 	burst.Shape = Enum.PartType.Ball
-	burst.Material = Enum.Material.Neon
+	burst.Material = Enum.Material.ForceField
 	burst.Color = Color3.fromRGB(160, 0, 255)
 	burst.Anchored = true
 	burst.CanCollide = false
@@ -387,7 +389,7 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	end
 end)
 
-local radius = 9999
+local radius = 99999
 local force = 9999
 local debounce = false
 
