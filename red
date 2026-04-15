@@ -145,26 +145,18 @@ local function createHeldBall(char)
 	ball.CanCollide = true
 	ball.Parent = char
 
-	------------------------------------------------
-	-- ORB POSITION
-	------------------------------------------------
 	local weld = Instance.new("Weld")
 	weld.Part0 = rightArm
 	weld.Part1 = ball
 	weld.C0 = CFrame.new(0, -1.0, 0)
 	weld.Parent = ball
 
-	------------------------------------------------
-	-- MAIN PULL PARTICLES
-	------------------------------------------------
 	local pullEmitter = Instance.new("ParticleEmitter")
 	pullEmitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
-
 	pullEmitter.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 200)),
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 60, 60))
 	})
-
 	pullEmitter.LightEmission = 1
 	pullEmitter.Speed = NumberRange.new(0.5, 1.8)
 	pullEmitter.Rate = 180
@@ -183,17 +175,12 @@ local function createHeldBall(char)
 	pullEmitter.RotSpeed = NumberRange.new(-140, 140)
 	pullEmitter.Parent = ball
 
-	------------------------------------------------
-	-- TINY PULL PARTICLES
-	------------------------------------------------
 	local tinyPullEmitter = Instance.new("ParticleEmitter")
 	tinyPullEmitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
-
 	tinyPullEmitter.Color = ColorSequence.new({
 		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
 		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 120, 120))
 	})
-
 	tinyPullEmitter.LightEmission = 1
 	tinyPullEmitter.Speed = NumberRange.new(0.2, 0.8)
 	tinyPullEmitter.Rate = 90
@@ -212,25 +199,78 @@ local function createHeldBall(char)
 	tinyPullEmitter.RotSpeed = NumberRange.new(-200, 200)
 	tinyPullEmitter.Parent = ball
 
-	------------------------------------------------
-	-- LIGHT
-	------------------------------------------------
 	local light = Instance.new("PointLight")
 	light.Brightness = 6
 	light.Range = 12
 	light.Color = Color3.fromRGB(255, 60, 60)
 	light.Parent = ball
 
-	------------------------------------------------
-	-- SOUND
-	------------------------------------------------
 	playSFX("113806286169554", char)
 
-	------------------------------------------------
-	-- FIRE
-	------------------------------------------------
 	task.delay(1, function()
 		if not char or not rootPart or not ball.Parent then return end
+
+		------------------------------------------------
+		-- FIXED GROUND EXPLOSION (RELIABLE)
+		------------------------------------------------
+		local forward = rootPart.CFrame.LookVector
+
+		local origin = rootPart.Position + forward * 10 + Vector3.new(0, 20, 0)
+		local rayDir = Vector3.new(0, -80, 0)
+
+		local params = RaycastParams.new()
+		params.FilterDescendantsInstances = {char}
+		params.FilterType = Enum.RaycastFilterType.Blacklist
+
+		local result = workspace:Raycast(origin, rayDir, params)
+
+		local pos
+		local color = Color3.fromRGB(255, 255, 255)
+		local material = Enum.Material.Plastic
+
+		if result then
+			pos = result.Position
+			color = result.Instance.Color
+			material = result.Instance.Material
+		else
+			pos = rootPart.Position + forward * 10
+		end
+
+		for i = 1, 12 do
+			local p = Instance.new("Part")
+			p.Size = Vector3.new(2, 2, 2)
+			p.Color = color
+			p.Material = material
+			p.Anchored = false
+			p.CanCollide = false
+			p.Massless = true
+
+			p.Position = pos + forward * 2 + Vector3.new(
+				math.random(-1, 1) * 0.5,
+				0.5,
+				math.random(-1, 1) * 0.5
+			)
+
+			p.Parent = workspace
+
+			p.AssemblyLinearVelocity =
+				(forward * 35) +
+				Vector3.new(
+					math.random(-6, 6),
+					math.random(45, 80),
+					math.random(-6, 6)
+				)
+
+			p.AssemblyAngularVelocity = Vector3.new(
+				math.random(-10, 10),
+				math.random(-10, 10),
+				math.random(-10, 10)
+			)
+
+			Debris:AddItem(p, 1.5)
+		end
+
+		------------------------------------------------
 
 		weld:Destroy()
 		ball.Anchored = true
