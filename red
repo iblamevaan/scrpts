@@ -1,3 +1,4 @@
+--red
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local TweenService = game:GetService("TweenService")
@@ -11,7 +12,7 @@ local cooldown = false
 local COOLDOWN_TIME = 1
 
 ------------------------------------------------
--- CHARACTER TRACKING (FIXED)
+-- CHARACTER TRACKING
 ------------------------------------------------
 local character = player.Character or player.CharacterAdded:Wait()
 
@@ -58,7 +59,6 @@ end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-
 	if input.KeyCode == Enum.KeyCode.X then
 		playAnimation()
 	end
@@ -68,11 +68,11 @@ end)
 -- SETTINGS
 ------------------------------------------------
 local FLING_RADIUS = 15
-local FLING_VELOCITY = 250
+local FLING_VELOCITY = 300
 local FLING_FORCE = 400000
 
 ------------------------------------------------
--- SOUND (STABLE FIX)
+-- SOUND
 ------------------------------------------------
 local function playSFX(soundId, character)
 	local root = character and character:FindFirstChild("HumanoidRootPart")
@@ -91,7 +91,6 @@ local function playSFX(soundId, character)
 	sound.RollOffMaxDistance = 60
 	sound.Parent = root
 
-	-- non-blocking load fix
 	task.spawn(function()
 		if not sound.IsLoaded then
 			sound.Loaded:Wait()
@@ -147,49 +146,89 @@ local function createHeldBall(char)
 	ball.Parent = char
 
 	------------------------------------------------
-	-- PARTICLES (your existing style kept)
+	-- ORB POSITION
 	------------------------------------------------
-	local particles = Instance.new("ParticleEmitter")
-	particles.Color = ColorSequence.new({
-		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 80, 80)),
-		ColorSequenceKeypoint.new(1, Color3.fromRGB(120, 0, 0))
-	})
-
-	particles.LightEmission = 0.8
-	particles.Size = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.7),
-		NumberSequenceKeypoint.new(0.5, 0.35),
-		NumberSequenceKeypoint.new(1, 0)
-	})
-
-	particles.Transparency = NumberSequence.new({
-		NumberSequenceKeypoint.new(0, 0.1),
-		NumberSequenceKeypoint.new(1, 1)
-	})
-
-	particles.Lifetime = NumberRange.new(0.25, 0.5)
-	particles.Rate = 55
-	particles.Speed = NumberRange.new(2, 6)
-	particles.Drag = 2
-	particles.SpreadAngle = Vector2.new(180, 180)
-	particles.Rotation = NumberRange.new(0, 360)
-	particles.RotSpeed = NumberRange.new(-90, 90)
-	particles.Parent = ball
-
-	local light = Instance.new("PointLight")
-	light.Brightness = 10
-	light.Range = 15
-	light.Color = Color3.fromRGB(255, 0, 0)
-	light.Parent = ball
-
 	local weld = Instance.new("Weld")
 	weld.Part0 = rightArm
 	weld.Part1 = ball
-	weld.C0 = CFrame.new(0, 0, 0)
+	weld.C0 = CFrame.new(0, -1.0, 0)
 	weld.Parent = ball
 
+	------------------------------------------------
+	-- MAIN PULL PARTICLES
+	------------------------------------------------
+	local pullEmitter = Instance.new("ParticleEmitter")
+	pullEmitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
+
+	pullEmitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 200, 200)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 60, 60))
+	})
+
+	pullEmitter.LightEmission = 1
+	pullEmitter.Speed = NumberRange.new(0.5, 1.8)
+	pullEmitter.Rate = 180
+	pullEmitter.Lifetime = NumberRange.new(0.25, 0.4)
+	pullEmitter.SpreadAngle = Vector2.new(180, 180)
+	pullEmitter.Acceleration = Vector3.new(0, -8, 0)
+	pullEmitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.22),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	pullEmitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	pullEmitter.Rotation = NumberRange.new(0, 360)
+	pullEmitter.RotSpeed = NumberRange.new(-140, 140)
+	pullEmitter.Parent = ball
+
+	------------------------------------------------
+	-- TINY PULL PARTICLES
+	------------------------------------------------
+	local tinyPullEmitter = Instance.new("ParticleEmitter")
+	tinyPullEmitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
+
+	tinyPullEmitter.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 120, 120))
+	})
+
+	tinyPullEmitter.LightEmission = 1
+	tinyPullEmitter.Speed = NumberRange.new(0.2, 0.8)
+	tinyPullEmitter.Rate = 90
+	tinyPullEmitter.Lifetime = NumberRange.new(0.2, 0.35)
+	tinyPullEmitter.SpreadAngle = Vector2.new(180, 180)
+	tinyPullEmitter.Acceleration = Vector3.new(0, -10, 0)
+	tinyPullEmitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.09),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	tinyPullEmitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	tinyPullEmitter.Rotation = NumberRange.new(0, 360)
+	tinyPullEmitter.RotSpeed = NumberRange.new(-200, 200)
+	tinyPullEmitter.Parent = ball
+
+	------------------------------------------------
+	-- LIGHT
+	------------------------------------------------
+	local light = Instance.new("PointLight")
+	light.Brightness = 6
+	light.Range = 12
+	light.Color = Color3.fromRGB(255, 60, 60)
+	light.Parent = ball
+
+	------------------------------------------------
+	-- SOUND
+	------------------------------------------------
 	playSFX("113806286169554", char)
 
+	------------------------------------------------
+	-- FIRE
+	------------------------------------------------
 	task.delay(1, function()
 		if not char or not rootPart or not ball.Parent then return end
 
@@ -200,48 +239,42 @@ local function createHeldBall(char)
 		local forwardDirection = rootPart.CFrame.LookVector
 		local endPos = startPos + forwardDirection * 600
 
-		local tween = TweenService:Create(
-			ball,
-			TweenInfo.new(1, Enum.EasingStyle.Linear),
-			{Position = endPos}
-		)
+		local tween = TweenService:Create(ball, TweenInfo.new(1), {
+			Position = endPos
+		})
 
 		tween:Play()
 
-		local flingConn
-		flingConn = RunService.Heartbeat:Connect(function()
+		local conn
+		conn = RunService.Heartbeat:Connect(function()
 			if not ball or not ball.Parent then
-				if flingConn then flingConn:Disconnect() end
+				conn:Disconnect()
 				return
 			end
 
 			local pos = ball.Position
 			local parts = getNearbyUnanchoredParts(pos, FLING_RADIUS, char)
 
-			for _, part in ipairs(parts) do
-				local offset = part.Position - pos
-				if offset.Magnitude == 0 then continue end
-
-				local direction = offset.Unit
-
-				local bv = Instance.new("BodyVelocity")
-				bv.MaxForce = Vector3.new(FLING_FORCE, FLING_FORCE, FLING_FORCE)
-				bv.P = 400000
-				bv.Velocity = direction * FLING_VELOCITY
-				bv.Parent = part
-
-				Debris:AddItem(bv, 0.1)
+			for _, p in ipairs(parts) do
+				local dir = (p.Position - pos)
+				if dir.Magnitude > 0 then
+					local bv = Instance.new("BodyVelocity")
+					bv.MaxForce = Vector3.new(400000, 400000, 400000)
+					bv.Velocity = dir.Unit * FLING_VELOCITY
+					bv.Parent = p
+					Debris:AddItem(bv, 0.1)
+				end
 			end
 		end)
 
 		tween.Completed:Wait()
-		if flingConn then flingConn:Disconnect() end
+		conn:Disconnect()
 		ball:Destroy()
 	end)
 end
 
 ------------------------------------------------
--- INPUT (FIXED — NO BREAKING)
+-- INPUT
 ------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
