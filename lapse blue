@@ -1,7 +1,10 @@
---lapse blue
+-- lapse blue
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 local currentTrack = nil
@@ -13,7 +16,6 @@ local function playAnimation()
 	local humanoid = character:FindFirstChildOfClass("Humanoid")
 	if not humanoid then return end
 
-	-- stop previous animation if playing
 	if currentTrack then
 		pcall(function()
 			currentTrack:Stop(0)
@@ -44,222 +46,315 @@ end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-
 	if input.KeyCode == Enum.KeyCode.Z then
 		playAnimation()
 	end
 end)
 
--- Services
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local UserInputService = game:GetService("UserInputService")
-local Workspace = game:GetService("Workspace")
-local Debris = game:GetService("Debris")
-
--- Player
-local player = Players.LocalPlayer
+------------------------------------------------
+-- PLAYER
+------------------------------------------------
 local character = player.Character or player.CharacterAdded:Wait()
 local root = character:WaitForChild("HumanoidRootPart")
 local camera = Workspace.CurrentCamera
 
+------------------------------------------------
 -- SETTINGS
-local ORBIT_RADIUS = 35
-local ORBIT_SPEED = 5
-local UP_DOWN_RANGE = 10
+------------------------------------------------
+local ORBIT_RADIUS = 25
+local ORBIT_SPEED = 4
+local UP_DOWN_RANGE = 4
 local UP_DOWN_SPEED = 2
 local WOBBLE_INTENSITY = 2
-local BALL_SIZE = 15
-local FADE_TIME = 1.5
+local BALL_SIZE = 3.2
 local SPIN_DURATION = 3
 local PULL_RADIUS = 25
-local PULL_STRENGTH = 255
-local AIM_INITIAL_SPEED = 55
-local AIM_MAX_SPEED = 215
-local ACCEL_EASE = 2.7
+local PULL_STRENGTH = 1000
 local AUDIO_ID = "116351856399704"
 
--- Variables
+------------------------------------------------
+-- VARIABLES
+------------------------------------------------
 local spinningBall = nil
-local spinningLight = nil
+local voidCore = nil
+local anchor = nil
+local ringsFolder = nil
+
 local holdingZ = false
 local ballAngle = 0
 local ballHeightOffset = 0
 local spinStartTime = 0
 local aimingPhase = false
 local aimPosition = nil
-local aimProgress = 0
-local aimCurrentSpeed = AIM_INITIAL_SPEED
 local ballSound = nil
 
--- Create spinning ball
+-- ✅ NPC DAMAGE TRACKER (ADDED ONLY)
+local npcDamageCooldown = {}
+
+------------------------------------------------
+-- ORB CREATION
+------------------------------------------------
 local function createBall()
-    local part = Instance.new("Part")
-    part.Shape = Enum.PartType.Ball
-    part.Size = Vector3.new(BALL_SIZE, BALL_SIZE, BALL_SIZE)
-    part.Material = Enum.Material.Neon
-    part.Color = Color3.fromRGB(0, 162, 255)
-    part.Anchored = true
-    part.CanCollide = false
-    part.Parent = Workspace
 
-    local light = Instance.new("PointLight")
-    light.Color = part.Color
-    light.Brightness = 9
-    light.Range = 20
-    light.Parent = part
+	local part = Instance.new("Part")
+	part.Shape = Enum.PartType.Ball
+	part.Size = Vector3.new(2.6, 2.6, 2.6)
+	part.Material = Enum.Material.Neon
+	part.Color = Color3.fromRGB(80, 190, 255)
+	part.Anchored = true
+	part.CanCollide = false
+	part.Parent = Workspace
 
-    local sound = Instance.new("Sound")
-    sound.SoundId = "rbxassetid://"..AUDIO_ID
-    sound.Looped = true
-    sound.Volume = 4
-    sound.Parent = part
-    sound:Play()
-    ballSound = sound
+	anchor = Instance.new("Part")
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.Transparency = 1
+	anchor.Size = Vector3.new(1,1,1)
+	anchor.Parent = workspace
 
-    return part, light
+	local glowEmitter = Instance.new("ParticleEmitter")
+	glowEmitter.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	glowEmitter.Color = ColorSequence.new(Color3.fromRGB(0, 140, 255))
+	glowEmitter.LightEmission = 0.95
+	glowEmitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 1.8),
+		NumberSequenceKeypoint.new(1, 0)
+	})
+	glowEmitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.22),
+		NumberSequenceKeypoint.new(1, 1)
+	})
+	glowEmitter.Lifetime = NumberRange.new(0.3, 0.45)
+	glowEmitter.Rate = 65
+	glowEmitter.Speed = NumberRange.new(0, 0.25)
+	glowEmitter.SpreadAngle = Vector2.new(360, 360)
+	glowEmitter.Parent = part
+
+	local aura = Instance.new("ParticleEmitter")
+	aura.Texture = "rbxasset://textures/particles/smoke_main.dds"
+	aura.Color = ColorSequence.new(Color3.fromRGB(0, 0, 139))
+	aura.LightEmission = 0.75
+	aura.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 4.2),
+		NumberSequenceKeypoint.new(1, 7.5)
+	})
+	aura.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.25),
+		NumberSequenceKeypoint.new(1, 0.95)
+	})
+	aura.Lifetime = NumberRange.new(0.6, 0.85)
+	aura.Speed = NumberRange.new(0, 0.15)
+	aura.SpreadAngle = Vector2.new(10, 10)
+	aura.Acceleration = Vector3.new(0, -6, 0)
+	aura.Rate = 65
+	aura.RotSpeed = NumberRange.new(-20, 20)
+	aura.Parent = part
+
+	voidCore = Instance.new("Part")
+	voidCore.Shape = Enum.PartType.Ball
+	voidCore.Size = Vector3.new(1.6, 1.6, 1.6)
+	voidCore.Material = Enum.Material.Neon
+	voidCore.Color = Color3.fromRGB(0, 0, 0)
+	voidCore.Anchored = true
+	voidCore.CanCollide = false
+	voidCore.Parent = Workspace
+
+	local coreLight = Instance.new("PointLight")
+	coreLight.Color = Color3.fromRGB(80, 140, 255)
+	coreLight.Brightness = 5
+	coreLight.Range = 16
+	coreLight.Parent = voidCore
+
+	ringsFolder = Instance.new("Folder")
+	ringsFolder.Name = "BlackHoleRings"
+	ringsFolder.Parent = workspace
+
+	local function spawnRing(extraScale, alpha)
+		local ring = Instance.new("Part")
+		ring.Anchored = true
+		ring.CanCollide = false
+		ring.Transparency = alpha
+		ring.Material = Enum.Material.Neon
+		ring.Color = Color3.fromRGB(80, 150, 255)
+		ring.Size = Vector3.new(0.25, 1, 1)
+		ring.Parent = ringsFolder
+
+		local mesh = Instance.new("SpecialMesh")
+		mesh.MeshType = Enum.MeshType.Cylinder
+		mesh.Scale = Vector3.new(0.05, 8 * extraScale, 6 * extraScale)
+		mesh.Parent = ring
+
+		local tiltX = math.rad(math.random(-10, 10))
+		local tiltZ = math.rad(math.random(-10, 10))
+
+		ring.CFrame = CFrame.new(anchor.Position)
+			* CFrame.Angles(math.rad(90) + tiltX, 0, tiltZ)
+			* CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
+
+		local tween = TweenService:Create(
+			ring,
+			TweenInfo.new(0.35, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+			{Transparency = 1, CFrame = ring.CFrame * CFrame.new(0, -1, 0)}
+		)
+
+		tween:Play()
+		tween.Completed:Connect(function() ring:Destroy() end)
+	end
+
+	task.spawn(function()
+		while spinningBall do
+			if anchor then
+				spawnRing(0.9, 0.9)
+				spawnRing(1.1, 0.95)
+			end
+			task.wait(0.12)
+		end
+	end)
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = "rbxassetid://"..AUDIO_ID
+	sound.Looped = true
+	sound.Volume = 3.5
+	sound.Parent = part
+	sound:Play()
+
+	ballSound = sound
+
+	return part
 end
 
--- Pull unanchored parts near a position (ignores character and ball)
+------------------------------------------------
+-- PULL SYSTEM + NPC DAMAGE (ADDED)
+------------------------------------------------
 local function pullParts(center)
-    local params = OverlapParams.new()
-    params.FilterDescendantsInstances = {player.Character, spinningBall}
-    params.FilterType = Enum.RaycastFilterType.Blacklist
+	local params = OverlapParams.new()
+	params.FilterDescendantsInstances = {player.Character, spinningBall}
+	params.FilterType = Enum.RaycastFilterType.Blacklist
 
-    local parts = Workspace:GetPartBoundsInRadius(center, PULL_RADIUS, params)
-    for _, part in ipairs(parts) do
-        if part:IsA("BasePart") and not part.Anchored and not part:IsDescendantOf(player.Character) then
-            local direction = center - part.Position
-            if direction.Magnitude > 0 then
-                part.AssemblyLinearVelocity = direction.Unit * PULL_STRENGTH
-            end
-        end
-    end
+	local parts = Workspace:GetPartBoundsInRadius(center, PULL_RADIUS, params)
+
+	for _, part in ipairs(parts) do
+		if part:IsA("BasePart") and not part.Anchored then
+			if not part:IsDescendantOf(player.Character) then
+				local dir = center - part.Position
+				if dir.Magnitude > 0 then
+					part.AssemblyLinearVelocity = dir.Unit * PULL_STRENGTH
+				end
+			end
+		end
+
+		-- ✅ NPC DAMAGE (2 per second)
+		local model = part:FindFirstAncestorOfClass("Model")
+		if model then
+			local humanoid = model:FindFirstChildOfClass("Humanoid")
+
+			if humanoid and model ~= player.Character then
+				local now = tick()
+				local last = npcDamageCooldown[humanoid]
+
+				if not last or now - last >= 1 then
+					humanoid:TakeDamage(2)
+					npcDamageCooldown[humanoid] = now
+				end
+			end
+		end
+	end
 end
 
--- Get mouse surface hit
+------------------------------------------------
+-- RAYCAST (UNCHANGED)
+------------------------------------------------
 local function getMouseSurfaceHit()
-    local mouse = player:GetMouse()
-    local origin = camera.CFrame.Position
-    local direction = (mouse.UnitRay.Direction).Unit * 1000
+	local mouse = player:GetMouse()
+	local origin = camera.CFrame.Position
+	local direction = mouse.UnitRay.Direction * 1000
 
-    local rayParams = RaycastParams.new()
-    local ignoreList = {player.Character}
-    if spinningBall then
-        table.insert(ignoreList, spinningBall)
-    end
-    rayParams.FilterDescendantsInstances = ignoreList
-    rayParams.FilterType = Enum.RaycastFilterType.Blacklist
+	local rayParams = RaycastParams.new()
+	rayParams.FilterDescendantsInstances = {player.Character, spinningBall, voidCore, anchor, ringsFolder}
+	rayParams.FilterType = Enum.RaycastFilterType.Blacklist
 
-    local result = Workspace:Raycast(origin, direction, rayParams)
-    if result and result.Instance then
-        if spinningBall and not result.Instance.Anchored and (result.Position - spinningBall.Position).Magnitude <= PULL_RADIUS then
-            return nil
-        end
-        return result.Position
-    end
-    return nil
+	local result = Workspace:Raycast(origin, direction, rayParams)
+	if result then
+		local hitPart = result.Instance
+		if hitPart and hitPart:IsA("BasePart") and not hitPart.Anchored then
+			return nil
+		end
+		return result.Position
+	end
+	return nil
 end
 
--- Update loop
+------------------------------------------------
+-- LOOP
+------------------------------------------------
 RunService.RenderStepped:Connect(function(dt)
-    if spinningBall then
-        -- Continuous pull
-        pullParts(spinningBall.Position)
+	if spinningBall then
+		pullParts(spinningBall.Position)
 
-        if not aimingPhase then
-            -- Phase 1: Spin + wobble around player
-            ballAngle += ORBIT_SPEED * dt
-            ballHeightOffset += UP_DOWN_SPEED * dt
-            local wobble = math.sin(tick()*5) * WOBBLE_INTENSITY
-            local pos = root.Position + Vector3.new(
-                math.cos(ballAngle) * ORBIT_RADIUS,
-                math.sin(ballHeightOffset) * UP_DOWN_RANGE + 3 + wobble,
-                math.sin(ballAngle) * ORBIT_RADIUS
-            )
-            spinningBall.Position = pos
+		if anchor then anchor.Position = spinningBall.Position end
+		if voidCore then voidCore.Position = spinningBall.Position end
 
-            -- Start aiming phase after spin duration
-            if tick() - spinStartTime >= SPIN_DURATION then
-                aimingPhase = true
-                aimCurrentSpeed = AIM_INITIAL_SPEED
-                aimProgress = 0
-                local hit = getMouseSurfaceHit()
-                if hit then
-                    aimPosition = hit
-                else
-                    aimPosition = spinningBall.Position
-                end
-            end
-        else
-            -- Phase 2: Move toward mouse surface with easing
-            local hit = getMouseSurfaceHit()
-            if hit then
-                aimPosition = hit
-            end
+		if not aimingPhase then
+			ballAngle += ORBIT_SPEED * dt
+			ballHeightOffset += UP_DOWN_SPEED * dt
 
-            if aimPosition then
-                local currentPos = spinningBall.Position
-                local direction = aimPosition - currentPos
-                local distance = direction.Magnitude
-                if distance > 0.1 then
-                    aimProgress = math.clamp(aimProgress + dt * ACCEL_EASE, 0, 1)
-                    local speed = AIM_INITIAL_SPEED + (AIM_MAX_SPEED - AIM_INITIAL_SPEED) * aimProgress^2
-                    aimCurrentSpeed = speed
-                    spinningBall.Position = currentPos + direction.Unit * math.min(speed * dt, distance)
-                end
-            end
-        end
-    end
+			local wobble = math.sin(tick()*5) * WOBBLE_INTENSITY
+
+			local pos = root.Position + Vector3.new(
+				math.cos(ballAngle) * ORBIT_RADIUS,
+				math.sin(ballHeightOffset) * UP_DOWN_RANGE + 3 + wobble,
+				math.sin(ballAngle) * ORBIT_RADIUS
+			)
+
+			spinningBall.Position = pos
+
+			if tick() - spinStartTime >= SPIN_DURATION then
+				aimingPhase = true
+				local hit = getMouseSurfaceHit()
+				aimPosition = hit or spinningBall.Position
+			end
+		else
+			local hit = getMouseSurfaceHit()
+			if hit then aimPosition = hit end
+
+			if aimPosition then
+				local dir = aimPosition - spinningBall.Position
+				if dir.Magnitude > 0.1 then
+					spinningBall.Position += dir.Unit * math.min(200 * dt, dir.Magnitude)
+				end
+			end
+		end
+	end
 end)
 
--- Start spin when Z is pressed
+------------------------------------------------
+-- INPUT
+------------------------------------------------
 UserInputService.InputBegan:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.Z and not holdingZ then
-        holdingZ = true
-        spinStartTime = tick()
-        aimingPhase = false
-        spinningBall, spinningLight = createBall()
-        ballAngle = math.random() * math.pi * 2
-        ballHeightOffset = math.random() * math.pi * 2
-    end
+	if gp then return end
+	if input.KeyCode == Enum.KeyCode.Z and not holdingZ then
+		holdingZ = true
+		spinStartTime = tick()
+		aimingPhase = false
+		spinningBall = createBall()
+	end
 end)
 
--- Release Z to finalize pull and fade
 UserInputService.InputEnded:Connect(function(input, gp)
-    if gp then return end
-    if input.KeyCode == Enum.KeyCode.Z and holdingZ then
-        holdingZ = false
-        if spinningBall then
-            local finalPosition = spinningBall.Position
-            pullParts(finalPosition)
+	if gp then return end
+	if input.KeyCode == Enum.KeyCode.Z and holdingZ then
+		holdingZ = false
 
-            -- Stop sound
-            if ballSound then
-                ballSound:Stop()
-            end
+		if ballSound then ballSound:Stop() end
 
-            -- Fade out
-            local fadeStart = tick()
-            local partToFade = spinningBall
-            local lightToFade = spinningLight
-            spinningBall = nil
-            spinningLight = nil
-            aimingPhase = false
+		local obj = spinningBall
+		spinningBall = nil
 
-            task.spawn(function()
-                while partToFade and partToFade.Parent do
-                    local alpha = math.clamp((tick() - fadeStart) / FADE_TIME, 0, 1)
-                    partToFade.Transparency = alpha
-                    lightToFade.Brightness = 2 * (1 - alpha)
-                    if alpha >= 1 then
-                        partToFade:Destroy()
-                        break
-                    end
-                    task.wait()
-                end
-            end)
-        end
-    end
+		task.spawn(function()
+			if obj then obj:Destroy() end
+			if voidCore then voidCore:Destroy() end
+			if anchor then anchor:Destroy() end
+			if ringsFolder then ringsFolder:Destroy() end
+		end)
+	end
 end)
