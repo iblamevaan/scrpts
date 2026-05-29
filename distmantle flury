@@ -1,0 +1,385 @@
+-- Sukuna Surrounding Flurry
+-- Put inside StarterCharacterScripts
+-- Press F
+
+local Players = game:GetService("Players")
+local UIS = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Debris = game:GetService("Debris")
+local SoundService = game:GetService("SoundService")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+-- SETTINGS
+local COOLDOWN = 3.2
+local FLURRY_DURATION = 3.2
+
+-- VERY DENSE
+local SPAWN_RATE = 0.003
+
+local SLASH_LIFETIME = 0.14
+
+local ACTIVE_SOUND_ID = "rbxassetid://75406946002214"
+local EXPLOSION_SOUND_ID = "rbxassetid://125901333308589"
+
+local SLASH_COLOR = Color3.fromRGB(220,0,0)
+local GLOW_COLOR = Color3.fromRGB(255,70,70)
+local BLACK = Color3.new(0,0,0)
+
+local canUse = true
+local currentTrack = nil
+
+-- CAMERA SHAKE
+local function shakeCamera(power, duration)
+	local cam = workspace.CurrentCamera
+	local start = tick()
+
+	local conn
+	conn = RunService.RenderStepped:Connect(function()
+		local elapsed = tick() - start
+
+		if elapsed >= duration then
+			conn:Disconnect()
+			return
+		end
+
+		local intensity = power * (1 - elapsed / duration)
+
+		cam.CFrame *= CFrame.new(
+			(math.random() - 0.5) * intensity,
+			(math.random() - 0.5) * intensity,
+			0
+		)
+	end)
+end
+
+-- CREATE SLASH
+local function createSlash(position, direction)
+	local slashFolder = Instance.new("Folder")
+	slashFolder.Parent = workspace
+
+	local holder = Instance.new("Part")
+	holder.Anchored = true
+	holder.CanCollide = false
+	holder.Transparency = 1
+	holder.Size = Vector3.new(1,1,1)
+	holder.CFrame = CFrame.new(position, position + direction)
+	holder.Parent = slashFolder
+
+	local att0 = Instance.new("Attachment")
+	local att1 = Instance.new("Attachment")
+
+	local size = math.random(6,11)
+
+	att0.Position = Vector3.new(-size,0,0)
+	att1.Position = Vector3.new(size,0,0)
+
+	att0.Parent = holder
+	att1.Parent = holder
+
+	-- OUTLINE
+	local outline = Instance.new("Beam")
+	outline.Attachment0 = att0
+	outline.Attachment1 = att1
+	outline.Width0 = 0.16
+	outline.Width1 = 0.16
+	outline.Color = ColorSequence.new(BLACK)
+	outline.FaceCamera = true
+	outline.Transparency = NumberSequence.new(0)
+	outline.Parent = holder
+
+	-- MAIN SLASH
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = att0
+	beam.Attachment1 = att1
+	beam.Width0 = 0.07
+	beam.Width1 = 0.07
+	beam.FaceCamera = true
+	beam.LightEmission = 1
+	beam.LightInfluence = 0
+
+	beam.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, GLOW_COLOR),
+		ColorSequenceKeypoint.new(0.5, SLASH_COLOR),
+		ColorSequenceKeypoint.new(1, GLOW_COLOR),
+	})
+
+	beam.Parent = holder
+
+	-- RANDOM ROTATION
+	holder.CFrame *= CFrame.Angles(
+		math.rad(math.random(-180,180)),
+		math.rad(math.random(-180,180)),
+		math.rad(math.random(-180,180))
+	)
+
+	-- PARTICLES
+	local emitter = Instance.new("ParticleEmitter")
+	emitter.Color = ColorSequence.new(GLOW_COLOR, SLASH_COLOR)
+	emitter.LightEmission = 1
+	emitter.Rate = 0
+	emitter.Speed = NumberRange.new(0,1)
+
+	emitter.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0,0.15),
+		NumberSequenceKeypoint.new(1,0)
+	})
+
+	emitter.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0,0),
+		NumberSequenceKeypoint.new(1,1)
+	})
+
+	emitter.Lifetime = NumberRange.new(0.05,0.12)
+
+	emitter.Parent = holder
+	emitter:Emit(6)
+
+	-- FADE
+	task.spawn(function()
+		local start = tick()
+
+		while true do
+			local alpha = (tick() - start) / SLASH_LIFETIME
+
+			if alpha >= 1 then
+				break
+			end
+
+			beam.Transparency = NumberSequence.new(alpha)
+			outline.Transparency = NumberSequence.new(alpha)
+
+			RunService.RenderStepped:Wait()
+		end
+
+		slashFolder:Destroy()
+	end)
+
+	Debris:AddItem(slashFolder, 1)
+end
+
+-- PLAY ANIMATION
+local function playAnimation()
+	local char = player.Character
+	if not char then return end
+
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop()
+		end)
+	end
+
+	local anim = Instance.new("Animation")
+	anim.AnimationId = "rbxassetid://118139871934372"
+
+	local track = humanoid:LoadAnimation(anim)
+
+	track.Priority = Enum.AnimationPriority.Action
+	track.Looped = false
+	track:Play()
+
+	currentTrack = track
+end
+
+-- EXPLOSION BURST
+local function slashExplosionBurst()
+	local rootCF = hrp.CFrame
+
+	local boom = Instance.new("Sound")
+	boom.SoundId = EXPLOSION_SOUND_ID
+	boom.Volume = 5
+	boom.Parent = SoundService
+	boom:Play()
+
+	Debris:AddItem(boom, 5)
+
+	for i = 1, 60 do
+		local offset =
+			Vector3.new(
+				math.random(-20,20),
+				math.random(-12,12),
+				math.random(-20,20)
+			)
+
+		local pos = hrp.Position + offset
+
+		createSlash(pos, rootCF.LookVector)
+
+		local burstPart = Instance.new("Part")
+		burstPart.Anchored = true
+		burstPart.CanCollide = false
+		burstPart.Transparency = 1
+		burstPart.Size = Vector3.new(1,1,1)
+		burstPart.Position = pos
+		burstPart.Parent = workspace
+
+		local burst = Instance.new("ParticleEmitter")
+
+		burst.Texture = "rbxasset://textures/particles/sparkles_main.dds"
+
+		burst.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255,90,90)),
+			ColorSequenceKeypoint.new(0.5, Color3.fromRGB(220,0,0)),
+			ColorSequenceKeypoint.new(1, Color3.new(0,0,0))
+		})
+
+		burst.LightEmission = 1
+		burst.Rate = 0
+
+		-- SLOWER PARTICLES
+		burst.Speed = NumberRange.new(8,20)
+
+		burst.Lifetime = NumberRange.new(0.6,1.2)
+
+		burst.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0,1),
+			NumberSequenceKeypoint.new(1,0)
+		})
+
+		burst.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0,0),
+			NumberSequenceKeypoint.new(1,1)
+		})
+
+		burst.SpreadAngle = Vector2.new(360,360)
+
+		burst.Parent = burstPart
+
+		burst:Emit(35)
+
+		Debris:AddItem(burstPart, 1)
+	end
+
+	shakeCamera(1.1, 0.6)
+end
+
+-- FLURRY
+local function startFlurry()
+	playAnimation()
+
+	local sound = Instance.new("Sound")
+	sound.SoundId = ACTIVE_SOUND_ID
+	sound.Volume = 4
+	sound.Looped = true
+	sound.Parent = SoundService
+	sound:Play()
+
+	local startTime = tick()
+
+	while tick() - startTime < FLURRY_DURATION do
+		if not hrp then break end
+
+		local rootCF = hrp.CFrame
+
+		-- SLASHES ALL AROUND PLAYER
+		for i = 1, 9 do
+			local offset =
+				Vector3.new(
+					math.random(-18,18),
+					math.random(-10,10),
+					math.random(-18,18)
+				)
+
+			local pos = hrp.Position + offset
+
+			local randomDir =
+				Vector3.new(
+					math.random(-100,100)/100,
+					math.random(-100,100)/100,
+					math.random(-100,100)/100
+				).Unit
+
+			createSlash(pos, randomDir)
+		end
+
+		shakeCamera(0.12, 0.05)
+
+		task.wait(SPAWN_RATE)
+	end
+
+	sound.Looped = false
+	sound.Ended:Connect(function()
+		sound:Destroy()
+	end)
+
+	slashExplosionBurst()
+end
+
+-- INPUT
+UIS.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.F and canUse then
+		canUse = false
+
+		task.spawn(startFlurry)
+
+		task.wait(COOLDOWN)
+
+		canUse = true
+	end
+end)
+
+-- RESET
+player.CharacterAdded:Connect(function(char)
+	character = char
+	hrp = char:WaitForChild("HumanoidRootPart")
+end)
+
+print("[Sukuna Surrounding Flurry] Loaded - Press F")
+
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
+local TweenService = game:GetService("TweenService")
+
+local player = Players.LocalPlayer
+local currentTrack = nil
+
+local function playAnimation()
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+
+	if currentTrack then
+		pcall(function()
+			currentTrack:Stop(0)
+		end)
+		currentTrack = nil
+	end
+
+	local ok, track = pcall(function()
+		return humanoid:PlayEmoteAndGetAnimTrackById(114798096827930)
+	end)
+
+	if not ok or not track then return end
+
+	track.Looped = false
+	track:AdjustSpeed(2)
+
+	currentTrack = track
+
+	task.delay(3, function()
+		if currentTrack then
+			pcall(function()
+				currentTrack:Stop(0)
+			end)
+			currentTrack = nil
+		end
+	end)
+end
+
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.KeyCode == Enum.KeyCode.F then
+		playAnimation()
+	end
+end)
