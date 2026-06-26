@@ -314,7 +314,7 @@ end
 UIS.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
 
-	if input.KeyCode == Enum.KeyCode.F and canUse then
+	if input.KeyCode == Enum.KeyCode.T and canUse then
 		canUse = false
 
 		task.spawn(startFlurry)
@@ -331,7 +331,7 @@ player.CharacterAdded:Connect(function(char)
 	hrp = char:WaitForChild("HumanoidRootPart")
 end)
 
-print("[Sukuna Surrounding Flurry] Loaded - Press F")
+print("[Sukuna Surrounding Flurry] Loaded - Press T")
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
