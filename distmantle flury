@@ -1,6 +1,6 @@
 -- Sukuna Surrounding Flurry
 -- Put inside StarterCharacterScripts
--- Press F
+-- Press T
 
 local Players = game:GetService("Players")
 local UIS = game:GetService("UserInputService")
@@ -379,7 +379,7 @@ end
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
 	if gameProcessed then return end
-	if input.KeyCode == Enum.KeyCode.F then
+	if input.KeyCode == Enum.KeyCode.T then
 		playAnimation()
 	end
 end)
